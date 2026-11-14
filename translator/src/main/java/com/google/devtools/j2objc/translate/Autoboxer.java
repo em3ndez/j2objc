@@ -33,13 +33,13 @@ import com.google.devtools.j2objc.ast.FunctionInvocation;
 import com.google.devtools.j2objc.ast.IfStatement;
 import com.google.devtools.j2objc.ast.InfixExpression;
 import com.google.devtools.j2objc.ast.MethodInvocation;
-import com.google.devtools.j2objc.ast.ParenthesizedExpression;
 import com.google.devtools.j2objc.ast.PostfixExpression;
 import com.google.devtools.j2objc.ast.PrefixExpression;
 import com.google.devtools.j2objc.ast.ReturnStatement;
 import com.google.devtools.j2objc.ast.SimpleName;
 import com.google.devtools.j2objc.ast.SuperConstructorInvocation;
 import com.google.devtools.j2objc.ast.SuperMethodInvocation;
+import com.google.devtools.j2objc.ast.SwitchExpression;
 import com.google.devtools.j2objc.ast.SwitchStatement;
 import com.google.devtools.j2objc.ast.TreeNode;
 import com.google.devtools.j2objc.ast.TreeUtil;
@@ -131,6 +131,11 @@ public class Autoboxer extends UnitTreeVisitor {
     }
     ExecutableElement valueMethod = ElementUtil.findMethod(
         boxedClass, TypeUtil.getName(primitiveType) + VALUE_METHOD);
+    if (valueMethod == null) {
+      primitiveType = typeUtil.unboxedType(boxedClass.asType());
+      valueMethod = ElementUtil.findMethod(
+          boxedClass, TypeUtil.getName(primitiveType) + VALUE_METHOD);
+    }
     assert valueMethod != null : "could not find value method for " + boxedClass;
     MethodInvocation invocation = new MethodInvocation(new ExecutablePair(valueMethod), null);
     expr.replaceWith(invocation);
@@ -280,12 +285,7 @@ public class Autoboxer extends UnitTreeVisitor {
     }
     Expression newExpr = node.getExpression();
     if (newExpr != expr) {
-      TreeNode parent = node.getParent();
-      if (parent instanceof ParenthesizedExpression) {
-        parent.replaceWith(TreeUtil.remove(newExpr));
-      } else {
-        node.replaceWith(TreeUtil.remove(newExpr));
-      }
+      node.replaceWith(TreeUtil.remove(newExpr));
     }
   }
 
@@ -457,6 +457,15 @@ public class Autoboxer extends UnitTreeVisitor {
 
   @Override
   public void endVisit(WhileStatement node) {
+    Expression expression = node.getExpression();
+    if (!expression.getTypeMirror().getKind().isPrimitive()) {
+      unbox(expression);
+    }
+  }
+
+  @Override
+  @SuppressWarnings("UngroupedOverloads")
+  public void endVisit(SwitchExpression node) {
     Expression expression = node.getExpression();
     if (!expression.getTypeMirror().getKind().isPrimitive()) {
       unbox(expression);

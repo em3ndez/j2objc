@@ -44,9 +44,9 @@ namespace protobuf {
 namespace compiler {
 namespace j2objc {
 
-std::string SafeName(const std::string &name);
+std::string SafeName(absl::string_view name);
 
-std::string UnderscoresToCamelCase(const std::string &input,
+std::string UnderscoresToCamelCase(absl::string_view input,
                                    bool cap_next_letter);
 
 // Converts the field's name to camel-case, e.g. "foo_bar_baz" becomes
@@ -69,17 +69,10 @@ std::string FileBaseName(const FileDescriptor *file);
 // Returns the file's parent directory.
 std::string FileParentDir(const FileDescriptor *file);
 
-// Gets the unqualified class name for the file.  Each .proto file becomes a
-// single Java class, with all its contents nested in that class.
-std::string FileClassName(const FileDescriptor *file);
-
 // Check whether there is any type defined in the proto file that has
 // the given class name.
 bool HasConflictingClassName(const FileDescriptor *file,
                              const std::string &classname);
-
-// Returns the file's Java package name.
-std::string FileJavaPackage(const FileDescriptor *file);
 
 // Returns output directory for the given package name.
 std::string JavaPackageToDir(std::string package_name);
@@ -89,9 +82,15 @@ std::string ClassName(const Descriptor *descriptor);
 std::string ClassName(const EnumDescriptor *descriptor);
 std::string ClassName(const FileDescriptor *descriptor);
 
-std::string CEnumName(const EnumDescriptor *descriptor);
+// Return names for the JavaLangEnum superclass's enumeration.
+std::string COrdinalEnumName(const EnumDescriptor *descriptor);
+std::string EnumOrdinalName(const EnumValueDescriptor *descriptor);
+std::string COrdinalPreprocessorName(const EnumDescriptor *descriptor);
 
+// Return names for the proto's enumeration by value (wire value).
+std::string CValueEnumName(const EnumDescriptor *descriptor);
 std::string EnumValueName(const EnumValueDescriptor *descriptor);
+std::string CValuePreprocessorName(const EnumDescriptor *descriptor);
 
 // These return the Java class name corresponding to the given descriptor.
 std::string JavaClassName(const Descriptor *descriptor);
@@ -128,6 +127,13 @@ std::string GetFieldTypeEnumValue(const FieldDescriptor *descriptor);
 std::string GetDefaultValueTypeName(const FieldDescriptor *descriptor);
 std::string GetFieldOptionsData(const FieldDescriptor *descriptor);
 
+std::string PropertyName(const FieldDescriptor *descriptor);
+std::string PropertyName(const EnumValueDescriptor *descriptor);
+
+void SetGlobalPrefix(std::string prefix);
+void SetGlobalPostfix(std::string postfix);
+void SetFileSubExtension(std::string fileSubExtension);
+void SetStripNonfunctionalCodegen();
 void ParsePrefixFile(std::string prefix_file);
 
 std::string MappedInputName(const FileDescriptor *file);
@@ -136,6 +142,7 @@ std::string StaticOutputFileName(const FileDescriptor *file,
 std::string FileDirMappingOutputName(const FileDescriptor *file);
 void GenerateFileDirMapping();
 bool IsGenerateFileDirMapping();
+bool IsGenerateProperties(const FileDescriptor *file);
 
 }  // namespace j2objc
 }  // namespace compiler

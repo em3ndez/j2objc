@@ -16,6 +16,7 @@ JAVA_TESTS = \
   MessagesTest.java \
   OneofTest.java \
   PrimitivesTest.java \
+  Proto3EnumTest.java \
 	Proto3OptionalTest.java \
 	com/google/protobuf/FieldPresenceTest.java \
   com/google/protobuf/WireFormatTest.java \
@@ -58,6 +59,7 @@ PROTOS = \
   package_prefix.proto \
   prefix_option.proto \
   primitives.proto \
+  proto3_enum.proto \
   single_file.proto \
   size_test.proto \
   string_fields.proto \
@@ -100,7 +102,7 @@ CLASSPATH = $(subst $(eval) ,:,$(strip $(CLASSPATH_LIST)))
 
 TEST_J2OBJCC = $(DIST_DIR)/j2objcc -g
 C_FLAGS = -Werror -Wno-objc-redundant-literal-use -Wno-format -Wno-parentheses \
-  -fobjc-abi-version=2 -fobjc-legacy-dispatch -stdlib=libc++
+  -fobjc-abi-version=2 -fobjc-legacy-dispatch
 
 INCLUDE_DIRS = . $(GEN_OBJC_DIR) $(DIST_INCLUDE_DIR)/guava
 
@@ -118,7 +120,7 @@ CREATE_JAR_SOURCES = $(JAVA_SOURCES) $(J2OBJC_PROTOS_JAVA)
 CREATE_JAR_RESOURCES = $(TESTDATA)
 CREATE_JAR_JAVAC_ARGS = -cp $(CLASSPATH) -encoding UTF-8
 CREATE_JAR_DEPENDENCIES = annotations_dist guava_java junit_java \
-  protobuf_runtime_java truth_java
+  protobuf_runtime_java
 include $(J2OBJC_ROOT)/make/create_jar.mk
 
 TRANSLATE_ARGS = -cp $(CLASSPATH):$(CREATE_JAR_RESULT) \
@@ -190,7 +192,7 @@ $(BUILD_DIR):
 # This ARC rule needs to be declared first, since it uses a more specific
 # pattern than the following rule.
 $(OBJS_DIR)/arc/%.o: $(GEN_OBJC_DIR)/arc/%.m \
-  | jre_emul_dist guava_dist junit_dist protobuf_runtime_dist $(J2OBJC_PROTOS_OBJC)
+  | jre_emul_dist guava_dist junit_dist truth_dist protobuf_runtime_dist $(J2OBJC_PROTOS_OBJC)
 	@mkdir -p $(@D)
 	$(TEST_J2OBJCC) -Werror -c $(INCLUDE_DIRS:%=-I%) $(C_FLAGS) \
       -fobjc-arc -fobjc-arc-exceptions -o $@ $<
@@ -205,9 +207,9 @@ $(OBJS_DIR)/my_malloc.o: my_malloc.m | jre_emul_dist
 	$(TEST_J2OBJCC) -c -o $@ $<
 
 $(BIN): $(OBJS) $(LIB_DEPS)
-	$(TEST_J2OBJCC) -ObjC -Werror -l c++ -ljre_emul -lguava -ljsr305 -ljunit \
+	$(TEST_J2OBJCC) -ObjC -Werror -ljre_emul -lguava -ljsr305 -ljunit \
       -ltruth -lprotobuf_runtime -o $@ $(OBJS)
 
 $(BIN_ARC): $(OBJS_ARC) $(LIB_DEPS)
-	$(TEST_J2OBJCC) -ObjC -Werror -l c++ -ljre_emul -lguava -ljsr305 -ljunit \
+	$(TEST_J2OBJCC) -ObjC -Werror -ljre_emul -lguava -ljsr305 -ljunit \
       -ltruth -lprotobuf_runtime -fobjc-arc -fobjc-arc-exceptions -o $@ $(OBJS_ARC)

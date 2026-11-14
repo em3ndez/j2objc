@@ -33,6 +33,8 @@ NATIVE_JRE_SOURCES_CORE = \
   J2ObjC_common.m \
   J2ObjC_icu.m \
   JavaThrowable.m \
+  JreCollectionAdapters.m \
+  JreExceptionAdapters.m \
   JreRetainedLocalValue.m \
   JreRetainedWith.m \
   MappedByteBuffer.m \
@@ -79,6 +81,7 @@ JAVA_PUBLIC_SOURCES_CORE = \
   android/system/Int64Ref.java \
   com/google/j2objc/util/AutoreleasePool.java \
   com/google/j2objc/util/CurrencyNumericCodes.java \
+  com/google/j2objc/util/XmlLoader.java \
   com/google/j2objc/util/logging/IOSLogHandler.java \
   java/io/BufferedInputStream.java \
   java/io/BufferedOutputStream.java \
@@ -130,6 +133,7 @@ JAVA_PUBLIC_SOURCES_CORE = \
   java/io/PrintWriter.java \
   java/io/PushbackInputStream.java \
   java/io/Reader.java \
+  java/io/Serial.java \
   java/io/Serializable.java \
   java/io/SerializablePermission.java \
   java/io/SerializationHandleMap.java \
@@ -185,6 +189,7 @@ JAVA_PUBLIC_SOURCES_CORE = \
   java/lang/Iterable.java \
   java/lang/LinkageError.java \
   java/lang/Long.java \
+  java/lang/MatchException.java \
   java/lang/Math.java \
   java/lang/NegativeArraySizeException.java \
   java/lang/NoClassDefFoundError.java \
@@ -197,6 +202,7 @@ JAVA_PUBLIC_SOURCES_CORE = \
   java/lang/OutOfMemoryError.java \
   java/lang/Package.java \
   java/lang/Readable.java \
+  java/lang/Record.java \
   java/lang/ReflectiveOperationException.java \
   java/lang/Runnable.java \
   java/lang/Runtime.java \
@@ -261,11 +267,13 @@ JAVA_PUBLIC_SOURCES_CORE = \
   java/lang/reflect/InvocationHandler.java \
   java/lang/reflect/InvocationTargetException.java \
   java/lang/reflect/MalformedParameterizedTypeException.java \
+  java/lang/reflect/MalformedParametersException.java \
   java/lang/reflect/Member.java \
   java/lang/reflect/Modifier.java \
   java/lang/reflect/Parameter.java \
   java/lang/reflect/ParameterizedType.java \
   java/lang/reflect/Proxy.java \
+  java/lang/reflect/RecordComponent.java \
   java/lang/reflect/ReflectPermission.java \
   java/lang/reflect/Type.java \
   java/lang/reflect/TypeVariable.java \
@@ -393,6 +401,7 @@ JAVA_PUBLIC_SOURCES_CORE = \
   java/util/HashMap.java \
   java/util/HashSet.java \
   java/util/Hashtable.java \
+  java/util/HexFormat.java \
   java/util/IdentityHashMap.java \
   java/util/IllegalFormatCodePointException.java \
   java/util/IllegalFormatConversionException.java \
@@ -588,6 +597,7 @@ JAVA_PRIVATE_SOURCES_CORE = \
   dalvik/system/CloseGuard.java \
   dalvik/system/VersionCodes.java \
   dalvik/system/VMStack.java \
+  dalvik/system/ZipPathValidator.java \
   java/io/Bits.java \
   java/io/DefaultFileSystem.java \
   java/io/DeleteOnExitHook.java \
@@ -597,6 +607,8 @@ JAVA_PRIVATE_SOURCES_CORE = \
   java/io/SerialCallbackContext.java \
   java/io/UnixFileSystem.java \
   java/lang/JavaLangAccess.java \
+  java/lang/StringUTF16.java \
+  java/lang/reflect/WeakCache.java \
   java/math/BitSieve.java \
   java/math/MutableBigInteger.java \
   java/math/SignedMutableBigInteger.java \
@@ -628,7 +640,10 @@ JAVA_PRIVATE_SOURCES_CORE = \
   java/util/DualPivotQuicksort.java \
   java/util/Grego.java \
   java/util/JumboEnumSet.java \
+  java/util/KeyValueHolder.java \
+  java/util/ImmutableCollections.java \
   java/util/RegularEnumSet.java \
+  java/util/Tripwire.java \
   java/util/logging/Logging.java \
   java/util/logging/LoggingProxyImpl.java \
   java/util/stream/AbstractPipeline.java \
@@ -655,7 +670,10 @@ JAVA_PRIVATE_SOURCES_CORE = \
   java/util/stream/StreamShape.java \
   java/util/stream/StreamSpliterators.java \
   java/util/stream/TerminalOp.java \
+  java/util/stream/Tripwire.java \
+  java/util/stream/WhileOps.java \
   jdk/internal/module/SystemModulesMap.java \
+  jdk/internal/util/Preconditions.java \
   libcore/api/CorePlatformApi.java \
   libcore/api/Hide.java \
   libcore/api/IntraCoreApi.java \
@@ -1180,6 +1198,7 @@ JAVA_PRIVATE_SOURCES_FILE = \
   java/nio/file/FileTreeIterator.java \
   java/nio/file/FileTreeWalker.java \
   sun/misc/JavaIOFileDescriptorAccess.java \
+  sun/misc/JavaObjectInputStreamAccess.java \
   sun/misc/SharedSecrets.java \
   sun/nio/fs/AbstractBasicFileAttributeView.java \
   sun/nio/fs/AbstractFileSystemProvider.java \
@@ -1338,6 +1357,7 @@ JAVA_PUBLIC_SOURCES_SECURITY = \
   java/security/cert/X509CRLSelector.java \
   java/security/cert/X509Extension.java \
   java/security/interfaces/DSAKey.java \
+  java/security/interfaces/DSAKeyPairGenerator.java \
   java/security/interfaces/DSAParams.java \
   java/security/interfaces/DSAPrivateKey.java \
   java/security/interfaces/DSAPublicKey.java \
@@ -1349,6 +1369,9 @@ JAVA_PUBLIC_SOURCES_SECURITY = \
   java/security/interfaces/RSAPrivateCrtKey.java \
   java/security/interfaces/RSAPrivateKey.java \
   java/security/interfaces/RSAPublicKey.java \
+  java/security/interfaces/XECKey.java \
+  java/security/interfaces/XECPrivateKey.java \
+  java/security/interfaces/XECPublicKey.java \
   java/security/spec/AlgorithmParameterSpec.java \
   java/security/spec/DSAParameterSpec.java \
   java/security/spec/DSAPrivateKeySpec.java \
@@ -1367,6 +1390,7 @@ JAVA_PUBLIC_SOURCES_SECURITY = \
   java/security/spec/InvalidParameterSpecException.java \
   java/security/spec/KeySpec.java \
   java/security/spec/MGF1ParameterSpec.java \
+  java/security/spec/NamedParameterSpec.java \
   java/security/spec/PKCS8EncodedKeySpec.java \
   java/security/spec/PSSParameterSpec.java \
   java/security/spec/RSAKeyGenParameterSpec.java \
@@ -1376,6 +1400,8 @@ JAVA_PUBLIC_SOURCES_SECURITY = \
   java/security/spec/RSAPrivateKeySpec.java \
   java/security/spec/RSAPublicKeySpec.java \
   java/security/spec/X509EncodedKeySpec.java \
+  java/security/spec/XECPrivateKeySpec.java \
+  java/security/spec/XECPublicKeySpec.java \
   java/util/UUID.java \
   javax/crypto/AEADBadTagException.java \
   javax/crypto/BadPaddingException.java \
@@ -1419,6 +1445,7 @@ JAVA_PUBLIC_SOURCES_SECURITY = \
   javax/crypto/spec/RC2ParameterSpec.java \
   javax/crypto/spec/RC5ParameterSpec.java \
   javax/crypto/spec/SecretKeySpec.java \
+  javax/security/auth/AuthPermission.java \
   javax/security/auth/DestroyFailedException.java \
   javax/security/auth/Destroyable.java \
   javax/security/auth/PrivateCredentialPermission.java \
@@ -1978,6 +2005,7 @@ JAVA_PUBLIC_SOURCES_TIME = \
   java/time/DayOfWeek.java \
   java/time/Duration.java \
   java/time/Instant.java \
+  java/time/InstantSource.java \
   java/time/LocalDate.java \
   java/time/LocalDateTime.java \
   java/time/LocalTime.java \
@@ -2047,6 +2075,7 @@ JAVA_PRIVATE_SOURCES_TIME = \
   java/time/zone/ZoneRulesProvider.java \
   sun/util/locale/provider/CalendarDataUtility.java
 
+#ExtendedTimeZone, ExtendedCalendar and ExtendedDateFormatSymbols are really private but referenced from the java_time_lib#
 JAVA_PUBLIC_SOURCES_ICU = \
   android/icu/lang/UCharacter.java \
   android/icu/lang/UCharacterCategory.java \
@@ -2063,6 +2092,7 @@ JAVA_PUBLIC_SOURCES_ICU = \
   android/icu/text/DecimalFormat.java \
   android/icu/text/DecimalFormatSymbols.java \
   android/icu/text/DisplayContext.java \
+  android/icu/text/ListFormatter.java \
   android/icu/text/LocaleDisplayNames.java \
   android/icu/text/MessageFormat.java \
   android/icu/text/MessagePattern.java \
@@ -2103,6 +2133,9 @@ JAVA_PUBLIC_SOURCES_ICU = \
   android/icu/util/ULocale.java \
   android/icu/util/ValueIterator.java \
   android/icu/util/VersionInfo.java \
+  com/android/icu/util/ExtendedTimeZone.java \
+  com/android/icu/util/ExtendedCalendar.java \
+  com/android/icu/text/ExtendedDateFormatSymbols.java \
   java/text/BreakIterator.java \
 
 JAVA_PRIVATE_SOURCES_ICU = \
@@ -2349,6 +2382,7 @@ PUBLIC_NATIVE_HEADERS = \
   J2ObjC_types.h \
   JavaObject.h \
   JreEmulation.h \
+  JreExceptionAdapters.h \
   JreRetainedWith.h \
   NSCopying+JavaCloneable.h \
   NSDataInputStream.h \

@@ -61,7 +61,7 @@ public class JavacParser extends Parser {
 
   private StandardJavaFileManager fileManager;
 
-  public JavacParser(Options options){
+  public JavacParser(Options options) {
     super(options);
   }
 
@@ -113,7 +113,12 @@ public class JavacParser extends Parser {
     try {
       JavacEnvironment parserEnv = createEnvironment(path, source);
       JavacTask task = parserEnv.task();
-      CompilationUnitTree unit = task.parse().iterator().next();
+      Iterator<? extends CompilationUnitTree> it = task.parse().iterator();
+      if (!it.hasNext()) {
+        processDiagnostics(parserEnv.diagnostics());
+        return null;
+      }
+      CompilationUnitTree unit = it.next();
       task.analyze();
       processDiagnostics(parserEnv.diagnostics());
       return TreeConverter.convertCompilationUnit(options, parserEnv, unit);
@@ -177,6 +182,10 @@ public class JavacParser extends Parser {
       javacOptions.add("-proc:only");
     } else {
       javacOptions.add("-proc:none");
+    }
+    // Disable javac warnings, as all sources j2objc transpiles are separately compiled by javac.
+    if (options.javacWarnings()) {
+      javacOptions.add("-nowarn");
     }
     javacOptions.addAll(options.getPlatformModuleSystemOptions());
     return javacOptions;
@@ -349,7 +358,6 @@ public class JavacParser extends Parser {
    * Extract the name of a Java source's package, or null if not found. This method is only used
    * before javac parsing to determine the main type name.
    */
-  @SuppressWarnings("fallthrough")
   static String packageName(String source) {
     try (StringReader r = new StringReader(source)) {
       StreamTokenizer tokenizer = new StreamTokenizer(r);

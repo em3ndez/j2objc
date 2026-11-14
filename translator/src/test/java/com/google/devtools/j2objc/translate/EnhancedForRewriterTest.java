@@ -32,10 +32,10 @@ public class EnhancedForRewriterTest extends GenerationTest {
         + "List<Character> charList; "
         + "void test() { for (char c : charArray) {} for (char c : charList) {} } }";
     String translation = translateSourceFile(source, "A", "A.m");
-    assertTranslation(translation,
-        "jchar c = [((JavaLangCharacter *) nil_chk(*b__++)) charValue];");
-    assertTranslation(translation,
-        "jchar c = [((JavaLangCharacter *) nil_chk(boxed__)) charValue];");
+    assertInTranslation(
+        translation, "unichar c = [((JavaLangCharacter *) nil_chk((*b__++))) charValue];");
+    assertInTranslation(
+        translation, "unichar c = [((JavaLangCharacter *) nil_chk(boxed__)) charValue];");
   }
 
   public void testEnhancedForLoopAnnotation() throws IOException {
@@ -68,15 +68,16 @@ public class EnhancedForRewriterTest extends GenerationTest {
         + " if (b) { break testLabel1; } continue testLabel1; }"
         + " testLabel2: for (@LoopTranslation(LoopStyle.JAVA_ITERATOR) Object o: list) {"
         + " if (b) { break testLabel2; } continue testLabel2; } } }", "Test", "Test.m");
-    assertTranslatedLines(translation,
+    assertTranslatedLines(
+        translation,
         "{",
         "  IOSObjectArray *a__ = [IOSObjectArray arrayWithObjects:"
-          + "(id[]){  } count:0 type:NSObject_class_()];",
+            + "(id[]){  } count:0 type:NSObject_class_()];",
         "  id const *b__ = a__->buffer_;",
         "  id const *e__ = b__ + a__->size_;",
         "  while (b__ < e__) {",
         "    {",
-        "      id o = *b__++;",
+        "      id o = RETAIN_AND_AUTORELEASE((*b__++));",
         "      if (b) {",
         "        goto break_testLabel1;",
         "      }",

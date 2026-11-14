@@ -202,9 +202,6 @@ public class JSONArrayTest extends TestCase {
     }
 
     public void testNumbers() throws JSONException {
-        if (System.getProperty("os.arch").equals("armv7")) {
-          return;
-        }
         JSONArray array = new JSONArray();
         array.put(Double.MIN_VALUE);
         array.put(9223372036854775806L);
@@ -258,11 +255,13 @@ public class JSONArrayTest extends TestCase {
         array.put("null");
         array.put("5\"8' tall");
         assertEquals(5, array.length());
+        // j2objc: fixed encoded string.
         assertEquals("[\"true\",\"5.5\",\"9223372036854775806\",\"null\",\"5\\\"8\\u0027 tall\"]",
                 array.toString());
 
         // although the documentation doesn't mention it, join() escapes text and wraps
         // strings in quotes
+        // j2objc: fixed encoded string.
         assertEquals("\"true\" \"5.5\" \"9223372036854775806\" \"null\" \"5\\\"8\\u0027 tall\"",
                 array.join(" "));
 
@@ -420,7 +419,10 @@ public class JSONArrayTest extends TestCase {
         array.put(Double.valueOf(Double.NaN));
         array.put(Double.valueOf(Double.NEGATIVE_INFINITY));
         array.put(Double.valueOf(Double.POSITIVE_INFINITY));
-        assertEquals(null, array.toString());
+        // j2objc: when the object contains an unsupported number, toString returns a stringified
+        // exception!
+        String result = array.toString();
+        assertTrue(result != null && result.contains("org.json.JSONException"));
     }
 
     /**
@@ -435,9 +437,11 @@ public class JSONArrayTest extends TestCase {
     }
 
     public void testToStringWithUnsupportedNumbers() throws JSONException {
-        // when the array contains an unsupported number, toString returns null!
+        // j2objc: when the object contains an unsupported number, toString returns a stringified
+        // exception!
         JSONArray array = new JSONArray(Arrays.asList(5.5, Double.NaN));
-        assertNull(array.toString());
+        String result = array.toString();
+        assertTrue(result != null && result.contains("org.json.JSONException"));
     }
 
     public void testListConstructorCopiesContents() throws JSONException {

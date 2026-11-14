@@ -18,6 +18,7 @@
 #include "java/lang/Character.h"
 #include "java/lang/Integer.h"
 #include "java/lang/Long.h"
+#include "java/lang/Math.h"
 #include "java/lang/NegativeArraySizeException.h"
 #include "java/lang/NullPointerException.h"
 #include "java/lang/OutOfMemoryError.h"
@@ -56,7 +57,7 @@ static inline void NewBuffer(JreStringBuilder *sb, jint size) {
 static JavaLangStringIndexOutOfBoundsException *IndexAndLength(JreStringBuilder *sb, jint index) {
   id exc = [[JavaLangStringIndexOutOfBoundsException alloc] initWithNSString:
       [NSString stringWithFormat:@"this.length=%d; index=%d", sb->count_, index]];
-  @throw AUTORELEASE(exc);
+  return AUTORELEASE(exc);
 }
 
 static JavaLangStringIndexOutOfBoundsException *StartEndAndLength(
@@ -64,7 +65,7 @@ static JavaLangStringIndexOutOfBoundsException *StartEndAndLength(
   id exc = [[JavaLangStringIndexOutOfBoundsException alloc] initWithNSString:
       [NSString stringWithFormat:@"this.length=%d; start=%d; length=%d", sb->count_, start,
       end - start]];
-  @throw AUTORELEASE(exc);
+  return AUTORELEASE(exc);
 }
 
 @implementation JavaLangAbstractStringBuilder
@@ -446,17 +447,17 @@ void JreStringBuilder_reverse(JreStringBuilder *sb) {
   jint end = sb->count_ - 1;
   jchar frontHigh = buf[0];
   jchar endLow = buf[end];
-  jboolean allowFrontSur = true, allowEndSur = true;
+  bool allowFrontSur = true, allowEndSur = true;
   for (jint i = 0, mid = sb->count_ / 2; i < mid; i++, --end) {
     jchar frontLow = buf[i + 1];
     jchar endHigh = buf[end - 1];
-    jboolean surAtFront = allowFrontSur && frontLow >= (jint)0xdc00 && frontLow <= (jint)0xdfff
-        && frontHigh >= (jint)0xd800 && frontHigh <= (jint)0xdbff;
+    bool surAtFront = allowFrontSur && frontLow >= (jint)0xdc00 && frontLow <= (jint)0xdfff &&
+                      frontHigh >= (jint)0xd800 && frontHigh <= (jint)0xdbff;
     if (surAtFront && (sb->count_ < 3)) {
       return;
     }
-    jboolean surAtEnd = allowEndSur && endHigh >= (jint)0xd800 && endHigh <= (jint)0xdbff
-        && endLow >= (jint)0xdc00 && endLow <= (jint)0xdfff;
+    bool surAtEnd = allowEndSur && endHigh >= (jint)0xd800 && endHigh <= (jint)0xdbff &&
+                    endLow >= (jint)0xdc00 && endLow <= (jint)0xdfff;
     allowFrontSur = allowEndSur = true;
     if (surAtFront == surAtEnd) {
       if (surAtFront) {
@@ -590,7 +591,7 @@ NSString *JreStringBuilder_toStringAndDealloc(JreStringBuilder *sb) {
     jchar firstChar = [subString characterAtIndex:0];
     while (true) {
       jint i = start;
-      jboolean found = false;
+      bool found = false;
       for (; i < delegate_.count_; i++) {
         if (delegate_.buffer_[i] == firstChar) {
           found = true;
@@ -628,7 +629,7 @@ NSString *JreStringBuilder_toStringAndDealloc(JreStringBuilder *sb) {
       jchar firstChar = [subString characterAtIndex:0];
       while (true) {
         jint i = start;
-        jboolean found = false;
+        bool found = false;
         for (; i >= 0; --i) {
           if (delegate_.buffer_[i] == firstChar) {
             found = true;
@@ -719,6 +720,26 @@ jint JavaLangCharacter_offsetByCodePointsRaw(
   return 0;
 }
 
+- (jint)compareToWithJavaLangAbstractStringBuilder:(JavaLangAbstractStringBuilder *)other {
+  if (self == other) {
+    return 0;
+  }
+  jchar *buf1 = delegate_.buffer_;
+  jchar *buf2 = other->delegate_.buffer_;
+  jint len1 = delegate_.count_;
+  jint len2 = other->delegate_.count_;
+
+  jint limit = JavaLangMath_minWithInt_withInt_(len1, len2);
+  for (jint i = 0; i < limit; i++) {
+    jchar c1 = *buf1++;
+    jchar c2 = *buf2++;
+    if (c1 != c2) {
+      return c1 - c2;
+    }
+  }
+  return len1 - len2;
+}
+
 - (void)dealloc {
   free(delegate_.buffer_);
 #if !__has_feature(objc_arc)
@@ -756,9 +777,14 @@ jint JavaLangCharacter_offsetByCodePointsRaw(
     { NULL, "I", 0x1, 19, 18, -1, -1, -1, -1 },
     { NULL, "LNSString;", 0x401, 20, -1, -1, -1, -1, -1 },
     { NULL, "[C", 0x10, -1, -1, -1, -1, -1, -1 },
+    { NULL, "LJavaLangAbstractStringBuilder;", 0x1, 21, 22, -1, -1, -1, -1 },
+    { NULL, "LJavaLangAbstractStringBuilder;", 0x1, 21, 23, -1, -1, -1, -1 },
+    { NULL, "LJavaLangAbstractStringBuilder;", 0x1, 21, 24, -1, -1, -1, -1 },
+    { NULL, "I", 0x1, 25, 26, -1, -1, -1, -1 },
   };
   #pragma clang diagnostic push
   #pragma clang diagnostic ignored "-Wobjc-multiple-method-names"
+  #pragma clang diagnostic ignored "-Wundeclared-selector"
   methods[0].selector = @selector(initPackagePrivate);
   methods[1].selector = @selector(initPackagePrivateWithInt:);
   methods[2].selector = @selector(java_length);
@@ -782,14 +808,19 @@ jint JavaLangCharacter_offsetByCodePointsRaw(
   methods[20].selector = @selector(lastIndexOfWithNSString:withInt:);
   methods[21].selector = @selector(description);
   methods[22].selector = @selector(getValue);
+  methods[23].selector = @selector(appendWithChar:);
+  methods[24].selector = @selector(appendWithJavaLangCharSequence:);
+  methods[25].selector = @selector(appendWithJavaLangCharSequence:withInt:withInt:);
+  methods[26].selector = @selector(compareToWithJavaLangAbstractStringBuilder:);
   #pragma clang diagnostic pop
   static const void *ptrTable[] = {
     "I", "length", "ensureCapacity", "setLength", "charAt", "codePointAt", "codePointBefore",
     "codePointCount", "II", "offsetByCodePoints", "getChars", "II[CI", "setCharAt", "IC",
-    "substring", "subSequence", "indexOf", "LNSString;", "LNSString;I", "lastIndexOf", "toString"
-  };
+    "substring", "subSequence", "indexOf", "LNSString;", "LNSString;I", "lastIndexOf", "toString",
+    "append", "C", "LJavaLangCharSequence;", "LJavaLangCharSequence;II", "compareTo",
+    "LJavaLangAbstractStringBuilder;" };
   static const J2ObjcClassInfo _JavaLangAbstractStringBuilder = {
-    "AbstractStringBuilder", "java.lang", ptrTable, methods, NULL, 7, 0x400, 23, 0, -1, -1, -1, -1,
+    "AbstractStringBuilder", "java.lang", ptrTable, methods, NULL, 7, 0x400, 27, 0, -1, -1, -1, -1,
     -1 };
   return &_JavaLangAbstractStringBuilder;
 }

@@ -27,19 +27,16 @@ import com.google.devtools.j2objc.types.GeneratedVariableElement;
 import com.google.devtools.j2objc.types.LambdaTypeElement;
 import com.google.j2objc.annotations.Property;
 import com.google.j2objc.annotations.RetainedWith;
-import com.sun.tools.javac.code.Attribute;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
-import com.sun.tools.javac.code.Symbol.VarSymbol;
-import com.sun.tools.javac.code.SymbolMetadata;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -61,8 +58,11 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.TypeVariable;
 import javax.lang.model.util.Elements;
 import javax.tools.JavaFileObject;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Utility methods for working with elements.
@@ -95,8 +95,11 @@ public final class ElementUtil {
   private final Elements javacElements;
   private final Map<Element, TypeMirror> elementTypeMap = new HashMap<>();
 
+  private final TypeElement javaObject;
+
   public ElementUtil(Elements javacElements) {
     this.javacElements = javacElements;
+    javaObject = javacElements.getTypeElement("java.lang.Object");
   }
 
   public static String getName(Element element) {
@@ -149,6 +152,10 @@ public final class ElementUtil {
             && hasQualifiedNamedAnnotation(element, LAZY_INIT));
   }
 
+  public static boolean isUnnamed(VariableElement element) {
+    return element.getSimpleName().contentEquals("");
+  }
+
   public static boolean isTopLevel(TypeElement type) {
     return type.getNestingKind() == NestingKind.TOP_LEVEL;
   }
@@ -186,6 +193,11 @@ public final class ElementUtil {
     return e.getKind() == ElementKind.PACKAGE;
   }
 
+  public static boolean isRecord(Element e) {
+    // Check it as a string so translator doesn't have to run with a Java 17 minimum.
+    return e.getKind().name().equals("RECORD");
+  }
+
   public static boolean isTypeElement(Element e) {
     ElementKind kind = e.getKind();
     return kind.isClass() || kind.isInterface();
@@ -213,8 +225,9 @@ public final class ElementUtil {
     return (TypeElement) element;
   }
 
-  public static TypeElement getSuperclass(TypeElement element) {
-    return TypeUtil.asTypeElement(element.getSuperclass());
+  public static @Nullable TypeElement getSuperclass(TypeElement element) {
+    TypeMirror superClass = element.getSuperclass();
+    return superClass != null ? TypeUtil.asTypeElement(element.getSuperclass()) : null;
   }
 
   public static List<TypeElement> getInterfaces(TypeElement element) {
@@ -297,6 +310,12 @@ public final class ElementUtil {
     return e instanceof GeneratedTypeElement ? ((GeneratedTypeElement) e).getHeader() : null;
   }
 
+  public static @Nullable String getForwardDeclaration(TypeElement e) {
+    return e instanceof GeneratedTypeElement
+        ? ((GeneratedTypeElement) e).getForwardDeclaration()
+        : null;
+  }
+
   public static boolean isIosType(TypeElement e) {
     return e instanceof GeneratedTypeElement && ((GeneratedTypeElement) e).isIosType();
   }
@@ -313,7 +332,7 @@ public final class ElementUtil {
   }
 
   /**
-   * Tests if this type element is private to it's source file. A public type declared
+   * Tests if this type element is private to its source file. A public type declared
    * within a private type is considered private.
    */
   public static boolean isPrivateInnerType(TypeElement type) {
@@ -350,10 +369,17 @@ public final class ElementUtil {
   }
 
   public static boolean isVariable(Element element) {
-    ElementKind kind = element.getKind();
-    return kind == ElementKind.FIELD || kind == ElementKind.LOCAL_VARIABLE
-        || kind == ElementKind.PARAMETER || kind == ElementKind.EXCEPTION_PARAMETER
-        || kind == ElementKind.RESOURCE_VARIABLE || kind == ElementKind.ENUM_CONSTANT;
+    return switch (element.getKind()) {
+      case FIELD,
+          LOCAL_VARIABLE,
+          PARAMETER,
+          EXCEPTION_PARAMETER,
+          RESOURCE_VARIABLE,
+          ENUM_CONSTANT,
+          BINDING_VARIABLE ->
+          true;
+      default -> false;
+    };
   }
 
   public static boolean isField(Element element) {
@@ -427,7 +453,7 @@ public final class ElementUtil {
   public static Set<String> parsePropertyAttribute(AnnotationMirror annotation) {
     assert getName(annotation.getAnnotationType().asElement()).equals("Property");
     String attributesStr = (String) getAnnotationValue(annotation, "value");
-    Set<String> attributes = new HashSet<>();
+    Set<String> attributes = new LinkedHashSet<>();
     if (attributesStr != null) {
       attributes.addAll(Arrays.asList(attributesStr.split(",\\s*")));
       attributes.remove(""); // Clear any empty strings.
@@ -579,6 +605,45 @@ public final class ElementUtil {
     return javacElements.getBinaryName(e).toString();
   }
 
+  public ExecutableElement getOriginalMethod(ExecutableElement method) {
+    TypeElement declaringClass = getDeclaringClass(method);
+    return getOriginalMethod(method, declaringClass, declaringClass);
+  }
+
+  /**
+   * Finds the original method element to use for generating a selector. The method returned is the
+   * first method found in the hierarchy while traversing in order of declared inheritance that
+   * doesn't override a method from a supertype. (ie. it is the first leaf node found in the tree of
+   * overriding methods)
+   */
+  public ExecutableElement getOriginalMethod(
+      ExecutableElement topMethod, TypeElement declaringClass, TypeElement currentType) {
+    if (currentType == null) {
+      return null;
+    }
+    TypeElement superclass =
+        currentType.getKind().isInterface() ? javaObject : getSuperclass(currentType);
+    ExecutableElement original = getOriginalMethod(topMethod, declaringClass, superclass);
+    if (original != null) {
+      return original;
+    }
+    for (TypeMirror supertype : currentType.getInterfaces()) {
+      original = getOriginalMethod(topMethod, declaringClass, TypeUtil.asTypeElement(supertype));
+      if (original != null) {
+        return original;
+      }
+    }
+    if (declaringClass == currentType) {
+      return topMethod;
+    }
+    for (ExecutableElement candidate : getMethods(currentType)) {
+      if (isInstanceMethod(candidate) && overrides(topMethod, candidate, declaringClass)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
   Map<? extends ExecutableElement, ? extends AnnotationValue> getElementValuesWithDefaults(
       AnnotationMirror annotation) {
     DeclaredType type = annotation.getAnnotationType();
@@ -648,6 +713,19 @@ public final class ElementUtil {
     return isGeneratedAnnotation(mirror.getAnnotationType().asElement());
   }
 
+  public static boolean isToBeRemovedAnnotations(Element e, Options options) {
+    if (isAnnotationType(e)) {
+      if (options.stripReflection()) {
+        // If --strip-reflection flag is on, CLASS, SOURCE or RUNTIME annotations will be removed.
+        return true;
+      } else {
+        // If --strip-reflection flag is off, CLASS or SOURCE annotations will be removed.
+        return !isRuntimeAnnotation(e);
+      }
+    }
+    return false;
+  }
+
   public static boolean isGeneratedAnnotation(Element e) {
     // Use a negative check, since CLASS retention is the default.
     return isAnnotationType(e) && !hasRetentionPolicy(e, "SOURCE");
@@ -669,7 +747,7 @@ public final class ElementUtil {
   }
 
   public static AnnotationMirror getAnnotation(Element element, Class<?> annotationClass) {
-    return getQualifiedNamedAnnotation(element, annotationClass.getName());
+    return getQualifiedNamedAnnotation(element, annotationClass.getCanonicalName());
   }
 
   public static boolean hasAnnotation(Element element, Class<?> annotationClass) {
@@ -741,31 +819,32 @@ public final class ElementUtil {
         return false;
       }
     }
-    if (isVariable(element) && element.asType().getKind().isPrimitive()) {
+    TypeMirror elementType = element.asType();
+    if (isVariable(element) && elementType.getKind().isPrimitive()) {
       return false;
     }
-    // The two if statements cover type annotations.
+    // The if statements cover type annotations.
     if (isMethod(element)
         && hasNamedAnnotation(((ExecutableElement) element).getReturnType(), pattern)) {
       return true;
     }
-    if (isVariable(element)) {
-      if (hasNamedAnnotation(element.asType(), pattern)) {
+    // Only consider annotations on the top-level type. Type annotations on nested positions, e.g.
+    // type arguments or array components as in `List<@Nullable String>` or `@Nullable String[]`,
+    // do not affect the nullability of the variable itself.
+    if (isVariable(element) && hasNamedAnnotation(elementType, pattern)) {
+      return true;
+    }
+    if (TypeUtil.isTypeVariable(elementType)) {
+      // Generics may be annotated as nullable and both the type variable and the bound
+      // may be annotated.
+      if (hasNamedAnnotation(((TypeVariable) elementType).asElement(), pattern)) {
         return true;
       }
-      // Annotation may be saved as a type attribute in the javac symbol.
-      if (element instanceof VarSymbol) {
-        SymbolMetadata metadata = ((VarSymbol) element).getMetadata();
-        if (metadata != null) {
-          List<Attribute.TypeCompound> attrs = metadata.getTypeAttributes();
-          for (Attribute.TypeCompound attr : attrs) {
-            if (pattern.matcher(getName(attr.type.asElement())).matches()) {
-              return true;
-            }
-          }
-        }
+      if (hasNamedAnnotation(((TypeVariable) elementType).getUpperBound(), pattern)) {
+        return true;
       }
     }
+
     // This covers declaration annotations.
     return hasNamedAnnotation(element, pattern);
   }
@@ -804,10 +883,25 @@ public final class ElementUtil {
     return options.getPackageInfoLookup().hasParametersAreNonnullByDefault(pkgName);
   }
 
+  public boolean isNullMarked(Element element, Options options) {
+    if (!options.nullMarked()) {
+      return false;
+    }
+    if (ElementUtil.hasAnnotation(element, NullMarked.class)) {
+      return true;
+    }
+    PackageElement pkg = getPackage(element);
+    if (ElementUtil.hasAnnotation(pkg, NullMarked.class)) {
+      return true;
+    }
+    String pkgName = pkg.getQualifiedName().toString();
+    return options.getPackageInfoLookup().isNullMarked(pkgName);
+  }
+
   /**
-   * Returns true if there's a SuppressedWarning annotation with the specified warning.
-   * The SuppressWarnings annotation can be inherited from the owning method or class,
-   * but does not have package scope.
+   * Returns true if there's a SuppressedWarning annotation with the specified warning. The
+   * SuppressWarnings annotation can be inherited from the owning method or class, but does not have
+   * package scope.
    */
   @SuppressWarnings("unchecked")
   public static boolean suppressesWarning(String warning, Element element) {
@@ -870,5 +964,9 @@ public final class ElementUtil {
       }
     }
     return null;
+  }
+
+  public TypeElement getTypeElement(String fullyQualifiedName) {
+    return javacElements.getTypeElement(fullyQualifiedName);
   }
 }

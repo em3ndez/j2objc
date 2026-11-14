@@ -57,8 +57,7 @@ FRAMEWORK_PUBLIC_HEADERS = $(FRAMEWORK_HEADERS)
 endif
 
 FRAMEWORK_DIR = $(DIST_FRAMEWORK_DIR)/$(FRAMEWORK_NAME).xcframework
-FRAMEWORK_HEADER = $(BUILD_DIR)/$(FRAMEWORK_NAME).h
-MODULE_MAP = $(BUILD_DIR)/module.modulemap
+FRAMEWORK_HEADER = $(BUILD_DIR)/$(FRAMEWORK_NAME)/$(FRAMEWORK_NAME).h
 
 FRAMEWORK_RESOURCES_DIR = $(FRAMEWORK_DIR)/Versions/A/Resources
 RESOURCE_FILES = $(FRAMEWORK_RESOURCE_FILES:%=$(FRAMEWORK_RESOURCES_DIR)/%)
@@ -74,81 +73,69 @@ RESOURCE_FILES = $(FRAMEWORK_RESOURCE_FILES:%=$(FRAMEWORK_RESOURCES_DIR)/%)
 # reserved-id-macro: external headers (Apple, ICU) have header guards with leading underscores.
 # super-class-method-mismatch: overridden methods with parameters with type variables are valid.
 DISALLOWED_WARNINGS = \
-  -Wno-c++98-compat \
-  -Wno-c++98-compat-pedantic \
-  -Wno-direct-ivar-access \
-  -Wno-documentation \
-  -Wno-documentation-unknown-command \
-  -Wno-dollar-in-identifier-extension \
-  -Wno-objc-interface-ivars \
-  -Wno-old-style-cast \
-  -Wno-overriding-method-mismatch \
-  -Wno-reserved-id-macro \
-  -Wno-super-class-method-mismatch
+	-Wno-c++98-compat \
+	-Wno-c++98-compat-pedantic \
+	-Wno-direct-ivar-access \
+	-Wno-documentation \
+	-Wno-documentation-unknown-command \
+	-Wno-dollar-in-identifier-extension \
+	-Wno-objc-interface-ivars \
+	-Wno-old-style-cast \
+	-Wno-overriding-method-mismatch \
+	-Wno-reserved-id-macro \
+	-Wno-super-class-method-mismatch
 
 # Check that headers compile with most compiler flags.
 VERIFY_FLAGS := -I$(FRAMEWORK_DIR)/Headers -I$(DIST_INCLUDE_DIR) \
-  -Werror -Weverything $(DISALLOWED_WARNINGS)
+	-Werror -Weverything $(DISALLOWED_WARNINGS)
 
-# As of Xcode 12, xcframeworks need a fat libraries for most platforms
-FAT_PLATFORMS = iphone simulator macosx maccatalyst watchos watchsimulator
-SINGLE_PLATFORMS = appletvos appletvsimulator
-framework_libraries = \
-  $(foreach platform,$(FAT_PLATFORMS),$(wildcard $(BUILD_DIR)/$(platform)/lib$(1).a)) \
-  $(foreach platform,$(SINGLE_PLATFORMS),$(wildcard $(BUILD_DIR)/objs-$(platform)/lib$(1).a)) \
-
-framework: dist $(FRAMEWORK_DIR) resources
+framework:: lib $(FRAMEWORK_DIR) resources
 	@:
 
 # Create an xcframework from all appletv, iphone, maccatalyst, macosx, simulator and watchos libs.
-$(FRAMEWORK_DIR): $(FRAMEWORK_HEADER) $(MODULE_MAP)
+$(FRAMEWORK_DIR): lib $(FRAMEWORK_HEADER) | $(DIST_FRAMEWORK_DIR)
 	@echo building $(FRAMEWORK_NAME) framework
-	@$(J2OBJC_ROOT)/scripts/gen_xcframework.sh $(FRAMEWORK_DIR) \
-			$(call framework_libraries,$(STATIC_LIBRARY_NAME))
-	@mkdir -p $(FRAMEWORK_DIR)/Versions/A/Headers
-	@/bin/ln -sfh A $(FRAMEWORK_DIR)/Versions/Current
-	@/bin/ln -sfh Versions/Current/Headers $(FRAMEWORK_DIR)/Headers
+	@rm -rf $@
+	@mkdir -p $@/Headers
 	@tar cf - -C $(STATIC_HEADERS_DIR) $(FRAMEWORK_HEADERS:$(STATIC_HEADERS_DIR)/%=%) \
-	    | tar xfp - -C $(FRAMEWORK_DIR)/Versions/A/Headers
-	@install -m 0644 $(FRAMEWORK_HEADER) $(FRAMEWORK_DIR)/Versions/A/Headers
-	@install -m 0644 $(MODULE_MAP) $(FRAMEWORK_DIR)/Versions/A/Headers/
+		| tar xfp - -C $@/Headers
+	@install -m 0644 $(FRAMEWORK_HEADER) $@/Headers
+	@$(J2OBJC_ROOT)/scripts/gen_xcframework.sh $@ \
+		$(shell $(J2OBJC_ROOT)/scripts/list_framework_libraries.sh $(STATIC_LIBRARY_NAME))
+	@rm -rf $@/Headers
 	@touch $@
 
 # Creates a framework "master" header file that includes all the framework's header files.
 # This header is then test-compiled with all allowed warnings to verify it can be included
 # by other projects.
 $(FRAMEWORK_HEADER):
+	@mkdir -p $$(dirname $@)
 	@echo "//\n// $(FRAMEWORK_NAME).h\n//\n" > $@
 	@for f in $(FRAMEWORK_PUBLIC_HEADERS:$(STATIC_HEADERS_DIR)/%=%); do\
-	    echo '#include <'$${f}'>'; done >> $@
+			echo '#include <'$${f}'>'; done >> $@
 
 test_warnings: $(FRAMEWORK_HEADER)
 	@clang -c -o $(FRAMEWORK_HEADER:%.h=%.o) $(VERIFY_FLAGS) -x objective-c $@
 	@clang -c -o $(FRAMEWORK_HEADER:%.h=%.o) $(VERIFY_FLAGS) -x objective-c \
-	    -fobjc-arc -fobjc-arc-exceptions $@
+		-fobjc-arc -fobjc-arc-exceptions $@
 	@clang -c -o $(FRAMEWORK_HEADER:%.h=%.o) $(VERIFY_FLAGS) -x objective-c -fno-objc-arc $@
 	@clang -c -o $(FRAMEWORK_HEADER:%.h=%.o) $(VERIFY_FLAGS) -x objective-c++ $@
 	@clang -c -o $(FRAMEWORK_HEADER:%.h=%.o) $(VERIFY_FLAGS) -x objective-c++ \
-	    -fobjc-arc -fobjc-arc-exceptions $@
+		-fobjc-arc -fobjc-arc-exceptions $@
 	@clang -c -o $(FRAMEWORK_HEADER:%.h=%.o) $(VERIFY_FLAGS) -x objective-c++ \
-	    -fno-objc-arc $@
+		-fno-objc-arc $@
 	@rm $(FRAMEWORK_HEADER:%.h=%.o)
-
-$(MODULE_MAP):
-	@echo "module" $(FRAMEWORK_NAME) "{" > $(MODULE_MAP)
-	@echo "  umbrella header" '"'$(FRAMEWORK_NAME).h'"' >> $(MODULE_MAP)
-	@echo >> $(MODULE_MAP)
-	@echo "  export *" >> $(MODULE_MAP)
-	@echo "  module * { export * }" >> $(MODULE_MAP)
-	@echo "}" >> $(MODULE_MAP)
 
 resources: $(RESOURCE_FILES)
 	@:
 
 $(FRAMEWORK_RESOURCES_DIR):
-	@mkdir -p $(FRAMEWORK_RESOURCES_DIR)
+	@mkdir -p $@
 	@/bin/ln -sfh Versions/Current/Resources $(FRAMEWORK_DIR)/Resources
 
 $(FRAMEWORK_RESOURCES_DIR)/%: % | $(FRAMEWORK_RESOURCES_DIR)
 	@mkdir -p $$(dirname $@)
 	@install -m 0644 $< $@
+
+$(DIST_FRAMEWORK_DIR):
+	@mkdir -p $@

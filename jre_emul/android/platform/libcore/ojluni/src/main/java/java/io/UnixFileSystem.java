@@ -25,17 +25,11 @@
 
 package java.io;
 
-import java.security.AccessController;
-
 import android.system.ErrnoException;
-
-import dalvik.system.BlockGuard;
-
+import java.security.AccessController;
 import libcore.io.Libcore;
 import libcore.io.OsConstants;
-
 import sun.security.action.GetPropertyAction;
-
 
 class UnixFileSystem extends FileSystem {
 
@@ -270,12 +264,8 @@ class UnixFileSystem extends FileSystem {
             default:
                 throw new IllegalArgumentException("Bad access mode: " + access);
         }
-
-        try {
-            return Libcore.os.access(f.getPath(), mode);
-        } catch (ErrnoException e) {
-            return false;
-        }
+        // j2objc: use canAccess instead of access to avoid expensive ErrnoException throw/catch.
+        return Libcore.os.canAccess(f.getPath(), mode);
     }
 
     // Android-changed: Add method to intercept native method call; BlockGuard support.
@@ -384,10 +374,10 @@ class UnixFileSystem extends FileSystem {
 
     public File[] listRoots() {
         try {
-            SecurityManager security = System.getSecurityManager();
-            if (security != null) {
-                security.checkRead("/");
-            }
+            // SecurityManager security = System.getSecurityManager();
+            // if (security != null) {
+            //     security.checkRead("/");
+            // }
             return new File[] { new File("/") };
         } catch (SecurityException x) {
             return new File[0];

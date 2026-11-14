@@ -23,6 +23,7 @@ import com.google.devtools.j2objc.ast.FieldDeclaration;
 import com.google.devtools.j2objc.ast.MethodDeclaration;
 import com.google.devtools.j2objc.ast.NormalAnnotation;
 import com.google.devtools.j2objc.ast.PackageDeclaration;
+import com.google.devtools.j2objc.ast.RecordDeclaration;
 import com.google.devtools.j2objc.ast.SimpleName;
 import com.google.devtools.j2objc.ast.TypeDeclaration;
 import com.google.devtools.j2objc.ast.UnitTreeVisitor;
@@ -51,15 +52,15 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
-import scenelib.annotations.Annotation;
-import scenelib.annotations.el.AClass;
-import scenelib.annotations.el.AElement;
-import scenelib.annotations.el.AField;
-import scenelib.annotations.el.AMethod;
-import scenelib.annotations.el.AScene;
-import scenelib.annotations.field.AnnotationFieldType;
-import scenelib.annotations.field.BasicAFT;
-import scenelib.annotations.field.EnumAFT;
+import org.checkerframework.afu.scenelib.Annotation;
+import org.checkerframework.afu.scenelib.el.AClass;
+import org.checkerframework.afu.scenelib.el.AElement;
+import org.checkerframework.afu.scenelib.el.AField;
+import org.checkerframework.afu.scenelib.el.AMethod;
+import org.checkerframework.afu.scenelib.el.AScene;
+import org.checkerframework.afu.scenelib.field.AnnotationFieldType;
+import org.checkerframework.afu.scenelib.field.BasicAFT;
+import org.checkerframework.afu.scenelib.field.EnumAFT;
 
 /** Records external annotations from an annotated AST that match declarations in a J2ObjC AST. */
 public final class ExternalAnnotationInjector extends UnitTreeVisitor {
@@ -102,6 +103,11 @@ public final class ExternalAnnotationInjector extends UnitTreeVisitor {
 
   @Override
   public boolean visit(EnumDeclaration node) {
+    return visitAbstractTypeDeclaration(node);
+  }
+
+  @Override
+  public boolean visit(RecordDeclaration node) {
     return visitAbstractTypeDeclaration(node);
   }
 
@@ -151,6 +157,11 @@ public final class ExternalAnnotationInjector extends UnitTreeVisitor {
 
   @Override
   public void endVisit(EnumDeclaration node) {
+    endVisitAbstractTypeDeclaration();
+  }
+
+  @Override
+  public void endVisit(RecordDeclaration node) {
     endVisitAbstractTypeDeclaration();
   }
 

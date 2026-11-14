@@ -25,6 +25,7 @@ import com.google.devtools.j2objc.util.CodeReferenceMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 final class RapidTypeAnalyser {
   private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
@@ -85,7 +86,7 @@ final class RapidTypeAnalyser {
 
   private static void onMemberReference(Member member) {
     if (member.isPolymorphic()) {
-      traversePolymorphicReference(member.getDeclaringType(), member.getName());
+      traversePolymorphicReference(member.getDeclaringType(), member.getSignature());
     } else {
       markTypeLive(member.getDeclaringType());
     }
@@ -118,12 +119,25 @@ final class RapidTypeAnalyser {
     }
   }
 
-  private static void traversePolymorphicReference(Type type, String memberName) {
-    Member member = type.getMemberByName(memberName);
+  private static void traversePolymorphicReference(Type type, String memberSignature) {
+    Member member = type.getMemberBySignature(memberSignature);
+    if (member == null) {
+      // If no member found, check for a member which original member matches the signature.
+      Optional<Member> matchingMember =
+          type.getMembers().stream()
+              .filter(
+                  candidate ->
+                      candidate.getOriginalMember() != null
+                          && memberSignature.equals(candidate.getOriginalMember().getSignature()))
+              .findFirst();
+      if (matchingMember.isPresent()) {
+        member = matchingMember.get();
+      }
+    }
     if (member == null) {
       // No member found in this class. In this case we need to mark the supertype method as
       // potentially live since it might be an accidental override.
-      markOverriddenMembersPotentiallyLive(type, memberName);
+      markOverriddenMembersPotentiallyLive(type, memberSignature);
     } else if (member.isPolymorphic()) {
       if (member.isFullyTraversed()) {
         return;
@@ -133,12 +147,12 @@ final class RapidTypeAnalyser {
     }
     // Recursively unfold the overriding chain.
     type.getImmediateSubtypes()
-        .forEach(subtype -> traversePolymorphicReference(subtype, memberName));
+        .forEach(subtype -> traversePolymorphicReference(subtype, memberSignature));
   }
 
-  private static void markOverriddenMembersPotentiallyLive(Type type, String memberName) {
+  private static void markOverriddenMembersPotentiallyLive(Type type, String memberSignature) {
     while ((type = type.getSuperClass()) != null) {
-      Member member = type.getMemberByName(memberName);
+      Member member = type.getMemberBySignature(memberSignature);
       if (member != null && member.isPolymorphic()) {
         markMemberPotentiallyLive(member);
         return;
@@ -166,6 +180,17 @@ final class RapidTypeAnalyser {
 
     // TODO(tball): remove when dead fields are reported (b/225384453).
     markMemberLive(type.getMemberByName(INITIALIZER_NAME));
+
+    type.getMembers()
+        .forEach(
+            member -> {
+              // Mark members where the original method is from an external type. Mark members
+              // that have the UsedByNative or UsedByReflection annotations if the type is used.
+              if (member.getOriginalMember() == null
+                  || member.hasUsedByNativeOrReflectionAnnotation()) {
+                markMemberLive(member);
+              }
+            });
 
     if (type.getSuperClass() != null) {
       markTypeLive(type.getSuperClass());

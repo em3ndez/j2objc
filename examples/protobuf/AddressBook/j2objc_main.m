@@ -24,6 +24,9 @@
 #include <execinfo.h>
 #include <objc/runtime.h>
 
+// Suppress a false-positive ARC-specific warning.
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+
 static void signalHandler(int sig) {
   // Get void*'s for all entries on the stack.
   void *array[64];
@@ -70,7 +73,6 @@ int j2objc_main(const char* className, int argc, const char *argv[]) {
   installSignalHandler();
 
   @autoreleasepool {
-    IOSClass *clazz = nil;
     @try {
       IOSClass *clazz = [IOSClass forName:[NSString stringWithUTF8String:className]];
       IOSObjectArray *mainArgs = JreEmulationMainArguments(argc, argv);

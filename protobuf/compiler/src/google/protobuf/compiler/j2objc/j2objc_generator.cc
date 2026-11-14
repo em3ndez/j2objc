@@ -41,8 +41,8 @@ namespace protobuf {
 namespace compiler {
 namespace j2objc {
 
-J2ObjCGenerator::J2ObjCGenerator() {}
-J2ObjCGenerator::~J2ObjCGenerator() {}
+J2ObjCGenerator::J2ObjCGenerator() = default;
+J2ObjCGenerator::~J2ObjCGenerator() = default;
 
 bool J2ObjCGenerator::Generate(const FileDescriptor* file,
                                const std::string& parameter,
@@ -60,6 +60,12 @@ bool J2ObjCGenerator::Generate(const FileDescriptor* file,
   for (int i = 0; i < options.size(); i++) {
     if (options[i].first == "prefixes") {
       ParsePrefixFile(options[i].second);
+    } else if (options[i].first == "global_prefix") {
+      SetGlobalPrefix(options[i].second);
+    } else if (options[i].first == "global_postfix") {
+      SetGlobalPostfix(options[i].second);
+    } else if (options[i].first == "file_sub_extension") {
+      SetFileSubExtension(options[i].second);
     } else if (options[i].first == "file_dir_mapping") {
       GenerateFileDirMapping();
     } else if (options[i].first == "generate_class_mappings") {
@@ -68,6 +74,8 @@ bool J2ObjCGenerator::Generate(const FileDescriptor* file,
       // Note: Java Lite does not guarantee API/ABI stability. We may choose to
       // break existing API in order to boost performance / reduce code size.
       enforce_lite = true;
+    } else if (options[i].first == "experimental_strip_nonfunctional_codegen") {
+      SetStripNonfunctionalCodegen();
     } else {
       *error = "Unknown generator option: " + options[i].first;
       return false;
@@ -101,10 +109,6 @@ bool J2ObjCGenerator::Generate(const FileDescriptor* file,
   }
 
   return true;
-}
-
-uint64_t J2ObjCGenerator::GetSupportedFeatures() const {
-  return FEATURE_PROTO3_OPTIONAL;
 }
 
 }  // namespace j2objc

@@ -15,7 +15,6 @@
 //  HelloSwift
 //
 
-
 import UIKit
 
 class ViewController: UIViewController {
@@ -25,9 +24,9 @@ class ViewController: UIViewController {
     super.viewDidLoad()
     var text = ""
     let hello = OrgJ2objcExample.HELLO_J2OBJC
-    let wednesday = OrgJ2objcExample_Day.WEDNESDAY.getShortName()
+    let wednesday = OrgJ2objcExample_Day.wednesday.getShortName()
     let sb = JavaLangStringBuilder().append(with: "StringBuilder\n").description()
-    text += "Static var: " + hello! +  "\n"
+    text += "Static var: " + hello! + "\n"
     text += "Enum: " + wednesday + "\n"
     text += "No nullability annotation: " + String(describing: type(of: hello)) + "\n"
     text += "NonNull annotation: " + String(describing: type(of: wednesday)) + "\n"
@@ -46,7 +45,7 @@ class ViewController: UIViewController {
     let h = JavaLangLong.toHexString(withLong: 100)
     let _: String = h
 
-    let it = JavaUtilArrayList().iterator()
+    let it = JavaUtilArrayList<AnyObject>().iterator()
     let _: JavaUtilIterator = it
 
     let t = JavaUtilCalendar.getInstance().getTime()
@@ -55,7 +54,7 @@ class ViewController: UIViewController {
     let c = JavaUtilCalendar_Builder().setDateWith(2019, with: 10, with: 18).build()
     let _: JavaUtilCalendar = c
 
-    let e = JavaUtilVector().elements()
+    let e = JavaUtilVector<AnyObject>().elements()
     let _: JavaUtilEnumeration = e
 
     let r = JavaUtilRegexPattern.compile(with: ".*")

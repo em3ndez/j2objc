@@ -162,6 +162,15 @@ CC_WARNINGS = -Wall -Werror -Wshorten-64-to-32 -Wimplicit-function-declaration \
   -Wmissing-field-initializers -Wduplicate-method-match -Wno-unused-variable \
   -Wno-nullability-completeness
 
+# Specify flag if clang version 13.1 or greater. This is necessary because that
+# version added a new warning that needs to be suppressed, and older versions
+# fail because it doesn't recognize the suppression flag.
+CLANG_13_1_MINIMUM = $(shell $(CLANG) --version | \
+    awk '/^Apple/ { split($$4, arr, "."); print ((arr[1] == 13 && arr[2] >= 1) || arr[1] > 13) ? "YES" : "NO"; }')
+ifeq ("$(CLANG_13_1_MINIMUM)", "YES")
+  CC_WARNINGS += -Wno-unused-but-set-variable
+endif
+
 ifdef GCC_PREPROCESSOR_DEFINITIONS
 DEBUGFLAGS += $(GCC_PREPROCESSOR_DEFINITIONS:%=-D%)
 endif
@@ -169,19 +178,27 @@ endif
 TRANSLATOR_DEPS = $(DIST_DIR)/j2objc $(DIST_JAR_DIR)/j2objc.jar
 
 ifndef JAVA_HOME
-JAVA_HOME = $(shell /usr/libexec/java_home -v 1.8)
+JAVA_HOME = $(shell /usr/libexec/java_home -v 21)
 endif
 JAVA = $(JAVA_HOME)/bin/java
 JAVAC = $(JAVA_HOME)/bin/javac
-ifneq (,$(findstring build 1.8, $(shell $(JAVA) -version 2>&1)))
-# Flag used to include tools.jar. This jar was removed in JDK 9.
-JAVA_8 = 1
-else ifneq (,$(findstring build 11, $(shell $(JAVA) -version 2>&1)))
-JAVA_VERSION = 11
-else ifneq (,$(findstring build 15, $(shell $(JAVA) -version 2>&1)))
-JAVA_VERSION = 15
+ifneq (,$(findstring build 21, $(shell $(JAVA) -version 2>&1)))
+JAVA_VERSION = 21
+else ifneq (,$(findstring build 22, $(shell $(JAVA) -version 2>&1)))
+JAVA_VERSION = 22
+else ifneq (,$(findstring build 23, $(shell $(JAVA) -version 2>&1)))
+JAVA_VERSION = 23
+else ifneq (,$(findstring build 24, $(shell $(JAVA) -version 2>&1)))
+JAVA_VERSION = 24
+else ifneq (,$(findstring build 25, $(shell $(JAVA) -version 2>&1)))
+JAVA_VERSION = 25
 else
-$(error JDK not supported. Please set JAVA_HOME to JDK 1.8, 11 or 15.)
+$(error JDK not supported. Please set JAVA_HOME to JDK 21 or higher.)
+endif
+
+# Used to build JRE module.
+ifndef JAVA_PLATFORM
+  JAVA_PLATFORM := $(shell $(J2OBJC_ROOT)/scripts/detect-java-platform.sh)
 endif
 
 ifndef MEMORY_MODEL_FLAG
@@ -195,14 +212,26 @@ endif
 
 TRANSLATOR_BUILD_FLAGS = \
   -Xlint:unchecked -encoding UTF-8 -nowarn
-ifndef JAVA_8
 TRANSLATOR_BUILD_FLAGS += \
+  --add-exports java.compiler/javax.lang.model.element=ALL-UNNAMED \
+  --add-exports java.compiler/javax.lang.model.type=ALL-UNNAMED \
+  --add-exports java.compiler/javax.lang.model.util=ALL-UNNAMED \
   --add-exports jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED \
   --add-exports jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED \
   --add-exports jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED \
   --add-exports jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED \
   --add-exports jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
-endif
+
+# Java flags needed to execute j2objc translator.
+J2OBJC_JAVA_FLAGS += \
+  --add-exports java.compiler/javax.lang.model.element=ALL-UNNAMED \
+  --add-exports java.compiler/javax.lang.model.type=ALL-UNNAMED \
+  --add-exports java.compiler/javax.lang.model.util=ALL-UNNAMED \
+  --add-exports jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED \
+  --add-exports jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED \
+  --add-exports jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED \
+  --add-exports jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED \
+  --add-exports jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
 
 comma=,
 space=$(eval) $(eval)
@@ -265,9 +294,3 @@ define long_list_to_file
 @files='$(wordlist 9500,9999,$(2))' && for i in $$files; do echo $$i >> $(1); done
 @if [ ! -e $(1) ]; then touch $(1); fi
 endef
-
-# Specify flag if clang version 7 or greater. This is necessary to support
-# iOS 9 apps that have the 'Enable bitcode' option set, which is the default for
-# new apps in Xcode 7.
-XCODE_7_MINIMUM := $(shell $(CLANG) --version | \
-    awk '/^Apple/ { split($$4, arr, "."); print (arr[1] >= 7) ? "YES" : "NO"; }')

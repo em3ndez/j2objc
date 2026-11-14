@@ -34,18 +34,17 @@ BASE_PACKAGE = com/google/devtools/j2objc
 
 DIST_DEPS = $(JSR305_JAR) j2objc_annotations.jar
 INTERNAL_DEPS = $(GUAVA_JAR) $(JSR305_JAR) $(PROCYON_JARS) $(SCENELIB_JAR) \
-    $(PLUME_UTIL_JAR) $(FLOGGER_JARS) $(JSPECIFY_JAR)
-ifdef JAVA_8
-INTERNAL_DEPS += $(JAVAC_JAR)
-endif
+    $(PLUME_UTIL_JAR) $(FLOGGER_JARS) $(JSPECIFY_JAR) \
+    $(ERROR_PRONE_ANNOTATIONS_JAR)
 JAR_DEPS_DIST = $(DIST_DEPS:%=$(DIST_JAR_DIR)/%) $(INTERNAL_DEPS:%=$(JAVA_DEPS_JAR_DIR)/%)
 JAR_DEPS_PATH = $(subst $(eval) ,:,$(strip $(JAR_DEPS_DIST)))
 JUNIT_JAR_DIST = $(DIST_JAR_DIR)/$(JUNIT_JAR)
-TRUTH_JAR_PATH = $(DIST_JAR_DIR)/$(TRUTH_JAR)
+TRUTH_JAR_PATH = $(JAVA_DEPS_JAR_DIR)/$(TRUTH_JAR)
+GUAVA_JAR_PATH = $(JAVA_DEPS_JAR_DIR)/$(GUAVA_JAR)
 
 CLASSPATH = $(CLASS_DIR):$(JAR_DEPS_PATH)
 TEST_CLASSPATH = \
-  $(TEST_DIR):$(CLASS_DIR):$(JUNIT_JAR_DIST):$(TRUTH_JAR_PATH)
+  $(TEST_DIR):$(CLASS_DIR):$(JUNIT_JAR_DIST):$(TRUTH_JAR_PATH):$(GUAVA_JAR_PATH)
 TEST_BOOT_CLASSPATH = $(DIST_JAR_DIR)/jre_emul.jar
 
 MAIN_CLASS = com.google.devtools.j2objc.J2ObjC
@@ -127,7 +126,6 @@ JAVA_SOURCES = \
 	ast/NumberLiteral.java \
 	ast/PackageDeclaration.java \
 	ast/ParameterizedType.java \
-	ast/ParenthesizedExpression.java \
 	ast/PostfixExpression.java \
 	ast/PrefixExpression.java \
 	ast/PrimitiveType.java \
@@ -180,6 +178,7 @@ JAVA_SOURCES = \
 	gen/LiteralGenerator.java \
 	gen/ObjectiveCHeaderGenerator.java \
 	gen/ObjectiveCImplementationGenerator.java \
+	gen/ObjectiveCMultiHeaderGenerator.java \
 	gen/ObjectiveCSegmentedHeaderGenerator.java \
 	gen/ObjectiveCSourceFileGenerator.java \
 	gen/PropertyGenerator.java \
@@ -236,6 +235,7 @@ JAVA_SOURCES = \
 	translate/SerializationStripper.java \
 	translate/StaticVarRewriter.java \
 	translate/SuperMethodInvocationRewriter.java \
+	translate/SwitchConstructRewriter.java \
 	translate/SwitchRewriter.java \
 	translate/UnsequencedExpressionRewriter.java \
 	translate/VarargsRewriter.java \
@@ -297,7 +297,7 @@ TEST_RESOURCE_FILES = $(TEST_RESOURCES:%=$(TEST_DIR)/%)
 
 # Files in dependent jars that aren't needed in combined jar.
 UNUSED_JAR_CONTENTS = \
-  $(CLASS_DIR)/[A-Z]* \
+  $(CLASS_DIR)/META-INF \
   $(CLASS_DIR)/[ahp]* \
   $(CLASS_DIR)/about_files \
   $(CLASS_DIR)/ant_tasks \
@@ -388,6 +388,7 @@ clean:
 	@rm -rf $(BUILD_DIR) $(J2OBJC_JAR_DIST) $(J2OBJC_SH_DIST)
 
 COMMON_TEST_FLAGS = \
+  $(J2OBJC_JAVA_FLAGS) \
   -classpath $(TEST_CLASSPATH):$(TEST_BOOT_CLASSPATH) \
   -Xss4m -XX:+UseParallelGC \
   -ea junit.textui.TestRunner

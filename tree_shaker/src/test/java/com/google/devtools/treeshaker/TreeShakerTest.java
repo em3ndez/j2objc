@@ -32,9 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import junit.framework.TestCase;
 
-/**
- * System tests for the TreeShaker.
- */
+/** System tests for the TreeShaker. */
 public class TreeShakerTest extends TestCase {
   static Splitter classSplitter = Splitter.on('\n').omitEmptyStrings();
   static Splitter methodSplitter =
@@ -62,10 +60,15 @@ public class TreeShakerTest extends TestCase {
   }
 
   private CodeReferenceMap findUnusedCode() throws IOException {
+    return findUnusedCode(false);
+  }
+
+  private CodeReferenceMap findUnusedCode(boolean stripReflection) throws IOException {
     Options options = new Options();
     options.setClasspath(System.getProperty(JAVA_CLASS_PATH.value()));
     options.setTreeShakerRoots(treeShakerRoots);
     options.setSourceFiles(inputFiles);
+    options.setStripReflection(stripReflection);
     TreeShaker shaker = new TreeShaker(options);
     CodeReferenceMap unused = shaker.findUnusedCode();
     if (ErrorUtil.errorCount() > 0) {
@@ -79,8 +82,8 @@ public class TreeShakerTest extends TestCase {
   public void testIncompleteAtFile() throws IOException {
     File atFile = new File(tempDir, "args");
     atFile.getParentFile().mkdirs();
-    Files.asCharSink(atFile, Charset.defaultCharset()).write(
-        "-classpath foo/bar:foo/bar/mumble -encoding utf-8");
+    Files.asCharSink(atFile, Charset.defaultCharset())
+        .write("-classpath foo/bar:foo/bar/mumble -encoding utf-8");
     addTreeShakerRootsFile("");
     addSourceFile("A.java", "package p; class A { void main() {} }");
 
@@ -89,7 +92,7 @@ public class TreeShakerTest extends TestCase {
     args.add("--tree-shaker-roots");
     args.add(treeShakerRoots.getPath());
     args.addAll(inputFiles);
-    Options.parse(args.toArray(String[]::new));
+    Options.parse(args.toArray(new String[0]));
     assertEquals(0, ErrorUtil.errorCount());
   }
 
@@ -138,12 +141,9 @@ public class TreeShakerTest extends TestCase {
   public void testImportStaticField() throws IOException {
     addTreeShakerRootsFile("a.A:\n    main()");
     addSourceFile("A.java", "package a; class A { static void main() { C.of(); }}");
-    addSourceFile("B.java",
-        "package a;",
-        "class B {",
-        "  static final B X = new B();",
-        "}");
-    addSourceFile("C.java",
+    addSourceFile("B.java", "package a;", "class B {", "  static final B X = new B();", "}");
+    addSourceFile(
+        "C.java",
         "package a;",
         "import static a.B.X;",
         "class C {",
@@ -152,21 +152,22 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("a.A", "A", "()V"),
-        getMethodName("a.C", "C", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("a.A", "A", "()V"), getMethodName("a.C", "C", "()V"));
   }
 
   public void testImportStaticMethod() throws IOException {
     addTreeShakerRootsFile("a.A:\n    main()");
     addSourceFile("A.java", "package a; class A { static void main() { C.of(); }}");
-    addSourceFile("B.java",
+    addSourceFile(
+        "B.java",
         "package a;",
         "class B {",
         "  static final B X = new B();",
         "  static B getX() { return X ; }",
         "}");
-    addSourceFile("C.java",
+    addSourceFile(
+        "C.java",
         "package a;",
         "import static a.B.getX;",
         "class C {",
@@ -175,9 +176,8 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("a.A", "A", "()V"),
-        getMethodName("a.C", "C", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("a.A", "A", "()V"), getMethodName("a.C", "C", "()V"));
   }
 
   public void testConstructorOverloads() throws IOException {
@@ -187,22 +187,21 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "B", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "B", "()V"));
   }
 
   public void testExplicitConstructorInvocation() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new B(); }}");
-    addSourceFile("B.java",
-        "package p; class B { B() { this(\"foo\"); } B(String s) {} B(Integer i) {} }");
+    addSourceFile(
+        "B.java", "package p; class B { B() { this(\"foo\"); } B(String s) {} B(Integer i) {} }");
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "B", "(Ljava/lang/Integer;)V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"), getMethodName("p.B", "B", "(Ljava/lang/Integer;)V"));
   }
 
   public void testMethodOverloads() throws IOException {
@@ -212,25 +211,54 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "b", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "b", "()V"));
   }
 
   public void testStaticInitializers() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new B().b(); }}");
-    addSourceFile("B.java",
+    addSourceFile(
+        "B.java",
         "package p;",
         "class B { static int i; static { i = 24; } void b() {} static { i = new C().c(); }}");
-    addSourceFile("C.java",
-        "package p; class C { static int i; static { i = 42; } int c() { return i; }}");
-    addSourceFile("D.java",
-        "package p; class D { static int i; static { i = 42; } int d() { return i; }}");
+    addSourceFile(
+        "C.java", "package p; class C { static int i; static { i = 42; } int c() { return i; }}");
+    addSourceFile(
+        "D.java", "package p; class D { static int i; static { i = 42; } int d() { return i; }}");
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).containsExactly("p.D");
     assertThat(getUnusedMethods(unused)).containsExactly(getMethodName("p.A", "A", "()V"));
+  }
+
+  public void testStaticReferenceInSwitchCase() throws IOException {
+    addTreeShakerRootsFile("p.A:\n    main()");
+    addSourceFile("A.java", "package p; class A { static void main() { D.d(B.X); }}");
+    addSourceFile("B.java", "package p; enum B { X, Y; }");
+    addSourceFile("C.java", "package p; class C { public static final String S = \"d\"; }");
+    addSourceFile(
+        "D.java",
+        "package p;",
+        "import static p.C.S;",
+        "class D { ",
+        "  static String d(B b) {",
+        "    switch(b) {",
+        "      case X: return S;",
+        "      case Y: return null;",
+        "    }",
+        "    return null;",
+        "  }}");
+    CodeReferenceMap unused = findUnusedCode();
+
+    assertThat(getUnusedClasses(unused)).isEmpty();
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"),
+            getMethodName("p.B", "values", "()[Lp/B;"),
+            getMethodName("p.B", "valueOf", "(Ljava/lang/String;)Lp/B;"),
+            getMethodName("p.C", "C", "()V"),
+            getMethodName("p.D", "D", "()V"));
   }
 
   public void testVariableInitializers() throws IOException {
@@ -272,9 +300,8 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).containsExactly("p.B", "p.B$C$D");
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B$C", "c", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B$C", "c", "()V"));
   }
 
   public void testConstructorChaining() throws IOException {
@@ -293,22 +320,21 @@ public class TreeShakerTest extends TestCase {
 
   public void testMethodOverrides() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
-    addSourceFile("A.java",
-        "package p; class A { static void main() { new C().b(); new C().c(); }}");
+    addSourceFile(
+        "A.java", "package p; class A { static void main() { new C().b(); new C().c(); }}");
     addSourceFile("B.java", "package p; class B { void b() {} void c() {} }");
     addSourceFile("C.java", "package p; class C extends B { void c() {} }");
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "c", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "c", "()V"));
   }
 
   public void testMethodOverridesIndirect() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
-    addSourceFile("A.java",
-        "package p; class A { static void main() { B b = new C(); b.b(); b.c(); }}");
+    addSourceFile(
+        "A.java", "package p; class A { static void main() { B b = new C(); b.b(); b.c(); }}");
     addSourceFile("B.java", "package p; class B { void b() {} void c() {} }");
     addSourceFile("C.java", "package p; class C extends B { void c() {} }");
     CodeReferenceMap unused = findUnusedCode();
@@ -335,9 +361,8 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "B", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "B", "()V"));
   }
 
   public void testStaticFieldAccess() throws IOException {
@@ -347,30 +372,29 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "B", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "B", "()V"));
   }
 
   public void testStaticFieldMethodAccess() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { B.TWO.b(); } }");
-    addSourceFile("B.java",
-        "package p; class B { static B TWO = new B(); void b() {} void c() {} }");
+    addSourceFile(
+        "B.java", "package p; class B { static B TWO = new B(); void b() {} void c() {} }");
     addSourceFile("C.java", "package p; class C { static C TWO = new C(); }");
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).containsExactly("p.C");
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "c", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "c", "()V"));
   }
 
   public void testInitializationBlocks() throws IOException {
     addTreeShakerRootsFile("A");
     addSourceFile("A.java", "class A { static void main() { C c; }}");
     addSourceFile("B.java", "class B { int i; { i = f(); } int f() { return 2; }}");
-    addSourceFile("C.java",
+    addSourceFile(
+        "C.java",
         "class C {",
         "  static int i;",
         "  static { i = f(); }",
@@ -381,10 +405,11 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("C", "C", "()V"),
-        getMethodName("C", "g", "()V"),
-        getMethodName("C", "h", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("C", "C", "()V"),
+            getMethodName("C", "g", "()V"),
+            getMethodName("C", "h", "()V"));
   }
 
   public void testStaticInitializationChainingForFields() throws IOException {
@@ -395,10 +420,11 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "B", "()V"),
-        getMethodName("p.C", "C", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"),
+            getMethodName("p.B", "B", "()V"),
+            getMethodName("p.C", "C", "()V"));
   }
 
   public void testStaticInitializationChainingForMethods() throws IOException {
@@ -409,15 +435,17 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "B", "()V"),
-        getMethodName("p.C", "C", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"),
+            getMethodName("p.B", "B", "()V"),
+            getMethodName("p.C", "C", "()V"));
   }
 
   public void testInstanceof() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
-    addSourceFile("A.java",
+    addSourceFile(
+        "A.java",
         "package p; class A {",
         "  static void main() { B b = new B(); int i = (b instanceof C) ? 0 : b.f(); }",
         "}");
@@ -426,10 +454,11 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.C", "C", "()V"),
-        getMethodName("p.C", "f", "()I"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"),
+            getMethodName("p.C", "C", "()V"),
+            getMethodName("p.C", "f", "()I"));
   }
 
   public void testEnums() throws IOException {
@@ -440,17 +469,29 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).containsExactly("p.C");
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "c", "()V"),
-        getMethodName("p.B", "values", "()[Lp/B;"),
-        getMethodName("p.B", "valueOf", "(Ljava/lang/String;)Lp/B;"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"),
+            getMethodName("p.B", "c", "()V"),
+            getMethodName("p.B", "values", "()[Lp/B;"),
+            getMethodName("p.B", "valueOf", "(Ljava/lang/String;)Lp/B;"));
+  }
+
+  public void testRecords() throws IOException {
+    addTreeShakerRootsFile("p.A:\n    main()");
+    addSourceFile(
+        "A.java", "package p; class A { static void main() { R r = new R(1, \"two\"); r.x(); } }");
+    addSourceFile("R.java", "package p; record R(int x, String y) { void b() {} }");
+    addSourceFile("UnusedRecord.java", "package p; record UnusedRecord(int x) {}");
+    CodeReferenceMap unused = findUnusedCode();
+
+    assertThat(getUnusedClasses(unused)).containsExactly("p.UnusedRecord");
   }
 
   public void testEnumImplicitMethods() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
-    addSourceFile("A.java",
-        "package p; class A { static void main() { B.valueOf(\"TWO\"); B.values(); }}");
+    addSourceFile(
+        "A.java", "package p; class A { static void main() { B.valueOf(\"TWO\"); B.values(); }}");
     addSourceFile("B.java", "package p; enum B { ONE, TWO; }");
     CodeReferenceMap unused = findUnusedCode();
 
@@ -466,24 +507,23 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "b", "()V"),
-        getMethodName("p.B", "c", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"),
+            getMethodName("p.B", "b", "()V"),
+            getMethodName("p.B", "c", "()V"));
   }
 
   public void testAbstractClassesIndirect() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
-    addSourceFile("A.java",
-        "package p; class A { static void main() { B b = new C(); b.c(); }}");
+    addSourceFile("A.java", "package p; class A { static void main() { B b = new C(); b.c(); }}");
     addSourceFile("B.java", "package p; abstract class B { void b() {} abstract void c(); }");
     addSourceFile("C.java", "package p; class C extends B { void c() {} }");
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "b", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "b", "()V"));
   }
 
   public void testInterfaces() throws IOException {
@@ -494,9 +534,8 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "b", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "b", "()V"));
   }
 
   public void testEntrySpec() throws IOException {
@@ -518,25 +557,25 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"));
+    assertThat(getUnusedMethods(unused)).containsExactly(getMethodName("p.A", "A", "()V"));
   }
 
   public void testInterfaceInheritance() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
-    addSourceFile("A.java",
-        "package p; class A { static void main() { D d = new D(); d.b(); d.c(); }}");
+    addSourceFile(
+        "A.java", "package p; class A { static void main() { D d = new D(); d.b(); d.c(); }}");
     addSourceFile("B.java", "package p; interface B { void b(); }");
     addSourceFile("C.java", "package p; interface C extends B { void c(); }");
-    addSourceFile("D.java",
-        "package p; class D implements C { public void b() {} public void c() {}}");
+    addSourceFile(
+        "D.java", "package p; class D implements C { public void b() {} public void c() {}}");
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "b", "()V"),
-        getMethodName("p.C", "c", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"),
+            getMethodName("p.B", "b", "()V"),
+            getMethodName("p.C", "c", "()V"));
   }
 
   public void testInterfaceInheritanceIndirect() throws IOException {
@@ -544,21 +583,23 @@ public class TreeShakerTest extends TestCase {
     addSourceFile("A.java", "package p; class A { static void main() { C c = new D(); c.b(); }}");
     addSourceFile("B.java", "package p; interface B { void b(); }");
     addSourceFile("C.java", "package p; interface C extends B { void c(); }");
-    addSourceFile("D.java",
-        "package p; class D implements C { public void b() {} public void c() {}}");
+    addSourceFile(
+        "D.java", "package p; class D implements C { public void b() {} public void c() {}}");
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.C", "c", "()V"),
-        getMethodName("p.D", "c", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"),
+            getMethodName("p.C", "c", "()V"),
+            getMethodName("p.D", "c", "()V"));
   }
 
   public void testExternalInterfaces() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new B().apply(1); }}");
-    addSourceFile("B.java",
+    addSourceFile(
+        "B.java",
         "package p;",
         "import java.util.function.Function;",
         "class B implements Function<Integer,Integer> {",
@@ -586,8 +627,8 @@ public class TreeShakerTest extends TestCase {
 
   public void testUninstantiatedTypes() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main(p.B,p.C,p.D)");
-    addSourceFile("A.java",
-        "package p; class A { static void main(B b, C c, D d) { b.b(); c.c(); d.d(); }}");
+    addSourceFile(
+        "A.java", "package p; class A { static void main(B b, C c, D d) { b.b(); c.c(); d.d(); }}");
     addSourceFile("B.java", "package p; interface B { void b(); }");
     addSourceFile("C.java", "package p; abstract class C { abstract void c(); }");
     addSourceFile("D.java", "package p; class D { void d(){} }");
@@ -608,8 +649,8 @@ public class TreeShakerTest extends TestCase {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new C().c().b(); }}");
     addSourceFile("B.java", "package p; abstract class B { abstract B b(); }");
-    addSourceFile("C.java",
-        "package p; class C { B c() { return new B() { B b() { return this; }}; }}");
+    addSourceFile(
+        "C.java", "package p; class C { B c() { return new B() { B b() { return this; }}; }}");
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
@@ -632,7 +673,8 @@ public class TreeShakerTest extends TestCase {
     addSourceFile("A.java", "package p; class A { static void main() { new D().d().b(); }}");
     addSourceFile("B.java", "package p; abstract class B { B(C c) {} abstract B b(); }");
     addSourceFile("C.java", "package p; class C { }");
-    addSourceFile("D.java",
+    addSourceFile(
+        "D.java",
         "package p; class D { B d() { return new B(new C()) { B b() { return this; }}; }}");
     CodeReferenceMap unused = findUnusedCode();
 
@@ -644,7 +686,8 @@ public class TreeShakerTest extends TestCase {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new C().c().b(); }}");
     addSourceFile("B.java", "package p; abstract class B { abstract B b(); }");
-    addSourceFile("C.java",
+    addSourceFile(
+        "C.java",
         "package p;",
         "class C {",
         "  B c() {",
@@ -664,7 +707,8 @@ public class TreeShakerTest extends TestCase {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new C().c().b(); }}");
     addSourceFile("B.java", "package p; abstract class B { abstract B b(); }");
-    addSourceFile("C.java",
+    addSourceFile(
+        "C.java",
         "package p;",
         "class C {",
         "  B c() {",
@@ -684,7 +728,8 @@ public class TreeShakerTest extends TestCase {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new a.C().c().b(); }}");
     addSourceFile("B.java", "package a; public abstract class B { public abstract B b(); }");
-    addSourceFile("C.java",
+    addSourceFile(
+        "C.java",
         "package a;",
         "public class C {",
         "  public B c() {",
@@ -698,16 +743,16 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("a.C$1", "c", "()La/B;"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("a.C$1", "c", "()La/B;"));
   }
 
   public void testAnonymousParametricAbstractTypes() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new C().c(); }}");
     addSourceFile("B.java", "package p; abstract class B<V> { abstract void b(V v); }");
-    addSourceFile("C.java",
+    addSourceFile(
+        "C.java",
         "package p;",
         "class C {",
         "  <V> B<V> c() { return new B<V>() { void b(V v) { }}; }",
@@ -715,17 +760,19 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "b", "(Ljava/lang/Object;)V"),
-        getMethodName("p.C$1", "b", "(Ljava/lang/Object;)V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"),
+            getMethodName("p.B", "b", "(Ljava/lang/Object;)V"),
+            getMethodName("p.C$1", "b", "(Ljava/lang/Object;)V"));
   }
 
   public void testAnonymousInterfaceTypes() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new C().c().b(); }}");
     addSourceFile("B.java", "package p; public interface B { B b(); }");
-    addSourceFile("C.java",
+    addSourceFile(
+        "C.java",
         "package p;",
         "class C {",
         "  B c() {",
@@ -742,7 +789,8 @@ public class TreeShakerTest extends TestCase {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new C().c.b(); }}");
     addSourceFile("B.java", "package p; interface B { B b(); }");
-    addSourceFile("C.java",
+    addSourceFile(
+        "C.java",
         "package p;",
         "class C {",
         "  B c = new B() { public B b() { return this; } };",
@@ -757,7 +805,8 @@ public class TreeShakerTest extends TestCase {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new C().c(); }}");
     addSourceFile("B.java", "package p; interface B<V> { void b(V v); }");
-    addSourceFile("C.java",
+    addSourceFile(
+        "C.java",
         "package p;",
         "class C {",
         "  <V> B<V> c() { return new B<V>() { public void b(V v) { }}; }",
@@ -765,16 +814,18 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "b", "(Ljava/lang/Object;)V"),
-        getMethodName("p.C$1", "b", "(Ljava/lang/Object;)V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(
+            getMethodName("p.A", "A", "()V"),
+            getMethodName("p.B", "b", "(Ljava/lang/Object;)V"),
+            getMethodName("p.C$1", "b", "(Ljava/lang/Object;)V"));
   }
 
   public void testLocalTypesBasic() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new B(); }}");
-    addSourceFile("B.java",
+    addSourceFile(
+        "B.java",
         "package p;",
         "class B {",
         "  void b() {",
@@ -786,15 +837,15 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).containsExactly("C", "p.D", "p.B$1C");
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "b", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "b", "()V"));
   }
 
   public void testLocalTypesWithExternalTypes() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new B().b(); }}");
-    addSourceFile("B.java",
+    addSourceFile(
+        "B.java",
         "package p;",
         "class B {",
         "  int b() {",
@@ -802,7 +853,8 @@ public class TreeShakerTest extends TestCase {
         "    return new C().c();",
         "  }",
         "}");
-    addSourceFile("C.java",
+    addSourceFile(
+        "C.java",
         "package p;",
         "class C {",
         "  int c() {",
@@ -820,8 +872,7 @@ public class TreeShakerTest extends TestCase {
 
   public void testLambdas() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
-    addSourceFile("A.java",
-        "package p; class A { static void main() { B b = x -> x; b.op(5); } }");
+    addSourceFile("A.java", "package p; class A { static void main() { B b = x -> x; b.op(5); } }");
     addSourceFile("B.java", "package p; interface B { int op(int x);  }");
     CodeReferenceMap unused = findUnusedCode();
 
@@ -839,14 +890,14 @@ public class TreeShakerTest extends TestCase {
 
     // Note: B.op is marked unused, which is a non-issue since the generated iOS protocols
     // don't contain any code.
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "op", "(I)I"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "op", "(I)I"));
   }
 
   public void testMethodValues() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
-    addSourceFile("A.java",
+    addSourceFile(
+        "A.java",
         "package p;",
         "class A {",
         "  static void main() {",
@@ -882,14 +933,14 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).containsExactly("p.D");
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.C", "C", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.C", "C", "()V"));
   }
 
   public void testChainedParametricTypes() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
-    addSourceFile("A.java",
+    addSourceFile(
+        "A.java",
         "package p; class A { static void main() { B<D>.C<D> c = new B<D>().new C<D>(); } }");
     addSourceFile("B.java", "package p; class B<X> { class C<Y> { }}");
     addSourceFile("D.java", "package p; class D { }");
@@ -906,26 +957,131 @@ public class TreeShakerTest extends TestCase {
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "c", "()V"));
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"), getMethodName("p.B", "c", "()V"));
   }
 
   public void testSimpleAnnotations() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new C().c(); }}");
     addSourceFile("B.java", "package p; @interface B { int b(); int c() default 3; }");
-    addSourceFile("C.java", "package p; @B(b=4) class C { @B(b=4,c=2) void c() { }}");
+    addSourceFile("C.java", "package p; @B(b=4) class C { @B(b=4,c=2) @F void c() { }}");
     addSourceFile("D.java", "package p; @interface D { }");
-    addSourceFile("E.java",
+    addSourceFile(
+        "E.java",
         "package p;",
         "import java.lang.annotation.Retention;",
         "import java.lang.annotation.RetentionPolicy;",
         "@Retention(RetentionPolicy.SOURCE)",
         "@interface E { }");
+    addSourceFile(
+        "F.java",
+        "package p;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.CLASS)",
+        "@interface F { }");
+    addSourceFile(
+        "G.java",
+        "package p;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.RUNTIME)",
+        "@interface G { }");
     CodeReferenceMap unused = findUnusedCode();
 
-    assertThat(getUnusedClasses(unused)).containsExactly("p.E");
+    // p.B will be removed since it's CLASS rentention type as default if not defined.
+    assertThat(getUnusedClasses(unused)).containsExactly("p.D", "p.E", "p.F", "p.B");
+    assertThat(getUnusedMethods(unused)).containsExactly(getMethodName("p.A", "A", "()V"));
+  }
+
+  public void testRuntimeAnnotationsWhenStripReflectionIsSetAndReflectionLevelisFull()
+      throws IOException {
+    addTreeShakerRootsFile("p.A:\n    main()");
+    addSourceFile("A.java", "package p; class A { static void main() { new C().c(); }}");
+    addSourceFile("C.java", "package p;", "@G class C { @F void c() { }}");
+    addSourceFile(
+        "ReflectionSupport.java",
+        "package com.google.j2objc.annotations;",
+        "import java.lang.annotation.Documented;",
+        "import java.lang.annotation.ElementType;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "import java.lang.annotation.Target;",
+        "@Documented",
+        "@Target({ ElementType.TYPE, ElementType.PACKAGE })",
+        "@Retention(RetentionPolicy.CLASS)",
+        "public @interface ReflectionSupport {",
+        "enum Level {NATIVE_ONLY,FULL}",
+        "Level value();}");
+    addSourceFile(
+        "package-info.java",
+        "@ReflectionSupport(Level.FULL)",
+        "package p;",
+        "import com.google.j2objc.annotations.ReflectionSupport;",
+        "import com.google.j2objc.annotations.ReflectionSupport.Level;");
+    addSourceFile(
+        "F.java",
+        "package p;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.CLASS)",
+        "@interface F { }");
+    addSourceFile(
+        "G.java",
+        "package p;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.RUNTIME)",
+        "@interface G {}");
+    addSourceFile(
+        "D.java",
+        "package d;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.RUNTIME)",
+        "@interface D {}");
+    CodeReferenceMap unused = findUnusedCode(true);
+
+    assertThat(getUnusedClasses(unused))
+        .containsExactly(
+            "com.google.j2objc.annotations.ReflectionSupport$Level",
+            "com.google.j2objc.annotations.ReflectionSupport",
+            "p.F",
+            "d.D");
+    assertThat(getUnusedMethods(unused)).containsExactly(getMethodName("p.A", "A", "()V"));
+  }
+
+  public void testRuntimeAnnotationsWhenStripReflectionIsSet() throws IOException {
+    addTreeShakerRootsFile("p.A:\n    main()");
+    addSourceFile("A.java", "package p; class A { static void main() { new C().c(); }}");
+    addSourceFile("B.java", "package p; @interface B { int b(); int c() default 3; }");
+    addSourceFile("C.java", "package p; @B(b=4) class C { @B(b=4,c=2) @F void c() { }}");
+    addSourceFile("D.java", "package p; @interface D { }");
+    addSourceFile(
+        "E.java",
+        "package p;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.SOURCE)",
+        "@interface E { }");
+    addSourceFile(
+        "F.java",
+        "package p;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.CLASS)",
+        "@interface F { }");
+    addSourceFile(
+        "G.java",
+        "package p;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.RUNTIME)",
+        "@interface G { }");
+    CodeReferenceMap unused = findUnusedCode(true);
+
+    assertThat(getUnusedClasses(unused)).containsExactly("p.D", "p.E", "p.F", "p.B", "p.G");
     assertThat(getUnusedMethods(unused)).containsExactly(getMethodName("p.A", "A", "()V"));
   }
 
@@ -937,14 +1093,15 @@ public class TreeShakerTest extends TestCase {
     addSourceFile("D.java", "package p; @C class D { }");
     CodeReferenceMap unused = findUnusedCode();
 
-    assertThat(getUnusedClasses(unused)).isEmpty();
+    assertThat(getUnusedClasses(unused)).containsExactly("p.B", "p.C");
     assertThat(getUnusedMethods(unused)).containsExactly(getMethodName("p.A", "A", "()V"));
   }
 
   public void testExternalAnnotationAnnotations() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { new C(); }}");
-    addSourceFile("B.java",
+    addSourceFile(
+        "B.java",
         "package p;",
         "import java.lang.annotation.Retention;",
         "import java.lang.annotation.RetentionPolicy;",
@@ -953,7 +1110,7 @@ public class TreeShakerTest extends TestCase {
     addSourceFile("C.java", "package p; @B class C { }");
     CodeReferenceMap unused = findUnusedCode();
 
-    assertThat(getUnusedClasses(unused)).isEmpty();
+    assertThat(getUnusedClasses(unused)).containsExactly("p.B");
     assertThat(getUnusedMethods(unused)).containsExactly(getMethodName("p.A", "A", "()V"));
   }
 
@@ -965,17 +1122,33 @@ public class TreeShakerTest extends TestCase {
     addSourceFile("D.java", "package p; @C class D { }");
     CodeReferenceMap unused = findUnusedCode();
 
-    assertThat(getUnusedClasses(unused)).isEmpty();
-    assertThat(getUnusedMethods(unused)).containsExactly(
-        getMethodName("p.A", "A", "()V"),
-        getMethodName("p.B", "values", "()[Lp/B;"),
-        getMethodName("p.B", "valueOf", "(Ljava/lang/String;)Lp/B;"));
+    assertThat(getUnusedClasses(unused)).containsExactly("p.B", "p.C");
+    assertThat(getUnusedMethods(unused)).containsExactly(getMethodName("p.A", "A", "()V"));
+  }
+
+  public void testAnnotationsWithClassValues() throws IOException {
+    addTreeShakerRootsFile("p.A:\n    main()");
+    addSourceFile("A.java", "package p; class A { static void main() { new D(); }}");
+    addSourceFile("B.java", "package p; class B {}");
+    addSourceFile("C.java", "package p; @interface C { Class<?>[] value(); }");
+    addSourceFile("D.java", "package p; @C({B.class}) class D {}");
+    CodeReferenceMap unused = findUnusedCode();
+
+    assertThat(getUnusedClasses(unused)).containsExactly("p.C", "p.B");
+    assertThat(getUnusedMethods(unused))
+        .containsExactly(getMethodName("p.A", "A", "()V"));
   }
 
   public void testAnnotationsWithInnerClasses() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { }}");
-    addSourceFile("B.java", "package p; @interface B { enum D { E; } D b() default D.E; }");
+    addSourceFile(
+        "B.java",
+        "package p;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.RUNTIME)",
+        "@interface B { enum D { E; } D b() default D.E; }");
     CodeReferenceMap unused = findUnusedCode();
 
     assertThat(getUnusedClasses(unused)).isEmpty();
@@ -985,7 +1158,13 @@ public class TreeShakerTest extends TestCase {
   public void testAnnotationsWithEnums() throws IOException {
     addTreeShakerRootsFile("p.A:\n    main()");
     addSourceFile("A.java", "package p; class A { static void main() { }}");
-    addSourceFile("B.java", "package p; @interface B { D b() default D.E; }");
+    addSourceFile(
+        "B.java",
+        "package p;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.RUNTIME)",
+        "@interface B { D b() default D.E; }");
     addSourceFile("D.java", "package p; enum D { E; }");
     CodeReferenceMap unused = findUnusedCode();
 
@@ -997,6 +1176,31 @@ public class TreeShakerTest extends TestCase {
             getMethodName("p.D", "valueOf", "(Ljava/lang/String;)Lp/D;"));
   }
 
+  public void testUnusedAnnotationsWithInnerEnums() throws IOException {
+    addTreeShakerRootsFile("p.A:\n    main()");
+    addSourceFile(
+        "A.java",
+        "package p; ",
+        // If annotation specifies a non-default value, test fails with no unused classes.
+        "@B(b=B.D.TWO) ",
+        "class A { static void main() { }}");
+    addSourceFile(
+        "B.java",
+        "package p;",
+        "import java.lang.annotation.Retention;",
+        "import java.lang.annotation.RetentionPolicy;",
+        "@Retention(RetentionPolicy.CLASS)",
+        "@interface B { ",
+        "  D b() default D.TWO; ",
+        // The default value of enum D should be ONE.
+        "  enum D { ONE, TWO, THREE; } ",
+        "}");
+    CodeReferenceMap unused = findUnusedCode();
+
+    assertThat(getUnusedClasses(unused)).containsExactly("p.B", "p.B$D");
+    assertThat(getUnusedMethods(unused)).containsExactly(getMethodName("p.A", "A", "()V"));
+  }
+  
   public void testPackageAnnotations() throws IOException {
     addTreeShakerRootsFile("a.A:\n    main()");
     addSourceFile("A.java", "package a; class A { static void main() { new a.B(); }}");
@@ -1005,7 +1209,7 @@ public class TreeShakerTest extends TestCase {
     addSourceFile("package-info.java", "@C package a;");
     CodeReferenceMap unused = findUnusedCode();
 
-    assertThat(getUnusedClasses(unused)).isEmpty();
+    assertThat(getUnusedClasses(unused)).containsExactly("a.C");
     assertThat(getUnusedMethods(unused)).containsExactly(getMethodName("a.A", "A", "()V"));
   }
 
@@ -1043,7 +1247,7 @@ public class TreeShakerTest extends TestCase {
     String output = writeUnused(findUnusedCode());
 
     assertThat(output).startsWith("p.A:\n");
-    assertThat(methodSplitter.split(output)).containsExactly("p.A:", "a(int)",  "a()");
+    assertThat(methodSplitter.split(output)).containsExactly("p.A:", "a(int)", "a()");
   }
 
   public void testWriteUnused() throws IOException {
@@ -1100,8 +1304,7 @@ public class TreeShakerTest extends TestCase {
             + "  }\n"
             + "void unused() {}\n"
             + "}");
-    addSourceFile(
-        "Grinder.java", "public class Grinder {\n  public Grinder(int gridSize) {}\n}");
+    addSourceFile("Grinder.java", "public class Grinder {\n  public Grinder(int gridSize) {}\n}");
     String output = writeUnused(findUnusedCode());
 
     assertThat(output).isEqualTo("CoffeeMaker:\n    unused()\n");
@@ -1127,18 +1330,17 @@ public class TreeShakerTest extends TestCase {
             + "  public void instanceMethod() {}\n"
             + "  public static void staticMethod() {}\n"
             + "}");
-    addSourceFile(
-        "Boiler.java", "public class Boiler {}");
+    addSourceFile("Boiler.java", "public class Boiler {}");
     String output = writeUnused(findUnusedCode());
 
     assertThat(output)
         .isEqualTo(
-            "CoffeeMaker:\n"
+            "Boiler:\n"
+                + "    Boiler()\n"
+                + "CoffeeMaker:\n"
                 + "    CoffeeMaker()\n"
                 + "CoffeeMaker:\n"
-                + "    instanceMethod()\n"
-                + "Boiler:\n"
-                + "    Boiler()\n");
+                + "    instanceMethod()\n");
   }
 
   // Regression test for b/224994241
@@ -1167,10 +1369,11 @@ public class TreeShakerTest extends TestCase {
 
     // String output = writeUnused();
     assertThat(getUnusedClasses(findUnusedCode())).isEmpty();
-    assertThat(getUnusedMethods(findUnusedCode())).containsExactly(
-        getMethodName("Boiler", "Boiler", "()V"),
-        getMethodName("CoffeeMaker", "CoffeeMaker", "()V"),
-        getMethodName("Grinder", "Grinder", "()V"));
+    assertThat(getUnusedMethods(findUnusedCode()))
+        .containsExactly(
+            getMethodName("Boiler", "Boiler", "()V"),
+            getMethodName("CoffeeMaker", "CoffeeMaker", "()V"),
+            getMethodName("Grinder", "Grinder", "()V"));
   }
 
   // Regression test for b/225022901
@@ -1183,11 +1386,7 @@ public class TreeShakerTest extends TestCase {
             + "    new CoffeeMaker(new CoilHeater()).start();\n"
             + "  }\n"
             + "}");
-    addSourceFile(
-        "Heater.java",
-        "interface Heater {\n"
-        + "  String getKind();\n"
-        + "}");
+    addSourceFile("Heater.java", "interface Heater {\n" + "  String getKind();\n" + "}");
     addSourceFile(
         "CoilHeater.java",
         "class CoilHeater implements Heater {\n"
@@ -1205,8 +1404,7 @@ public class TreeShakerTest extends TestCase {
             + "    return \"Induction\";\n"
             + "  }\n"
             + "  public void startInduction() {}\n"
-            + "}"
-    );
+            + "}");
     addSourceFile(
         "CoffeeMaker.java",
         "public class CoffeeMaker {\n"
@@ -1249,9 +1447,7 @@ public class TreeShakerTest extends TestCase {
             + "public class CoffeeMaker {\n"
             + "  CoffeeMaker(Function<Bean, Boolean> beanChecker) {}\n"
             + "}");
-    addSourceFile(
-        "Bean.java",
-        "interface Bean {}");
+    addSourceFile("Bean.java", "interface Bean {}");
     String output = writeUnused(findUnusedCode());
 
     // Verify Bean type isn't dead.
@@ -1273,9 +1469,7 @@ public class TreeShakerTest extends TestCase {
             + "public class CoffeeMaker {\n"
             + "  CoffeeMaker(Function<Boolean, Bean> beanProvider) {}\n"
             + "}");
-    addSourceFile(
-        "Bean.java",
-        "interface Bean {}");
+    addSourceFile("Bean.java", "interface Bean {}");
     String output = writeUnused(findUnusedCode());
 
     // Verify Bean type isn't dead.
@@ -1323,9 +1517,9 @@ public class TreeShakerTest extends TestCase {
     assertThat(output)
         .isEqualTo(
             "Grinder$Setting:\n"
-                + "    Grinder$Setting[] values()\n"
+                + "    Grinder$Setting valueOf(java.lang.String)\n"
                 + "Grinder$Setting:\n"
-                + "    Grinder$Setting valueOf(java.lang.String)\n");
+                + "    Grinder$Setting[] values()\n");
   }
 
   // Regression test for b/224970952
@@ -1397,12 +1591,8 @@ public class TreeShakerTest extends TestCase {
 
     // Verify that while Grinder is not instantiated, start() method is live, because
     // start(Grinder) is live.
-    assertThat(output).isEqualTo(
-        "CoffeeMaker:\n"
-        + "    CoffeeMaker()\n"
-        + "Grinder:\n"
-        + "    Grinder()\n"
-        );
+    assertThat(output)
+        .isEqualTo("CoffeeMaker:\n" + "    CoffeeMaker()\n" + "Grinder:\n" + "    Grinder()\n");
   }
 
   // Regression test for b/228617391
@@ -1455,12 +1645,9 @@ public class TreeShakerTest extends TestCase {
             + "  }\n"
             + "  public void run() throws OverheatException, OutOfCoffeeException {}\n"
             + "}");
+    addSourceFile("OverheatException.java", "public class OverheatException extends Exception {}");
     addSourceFile(
-        "OverheatException.java",
-        "public class OverheatException extends Exception {}");
-    addSourceFile(
-        "OutOfCoffeeException.java",
-        "public class OutOfCoffeeException extends Exception {}");
+        "OutOfCoffeeException.java", "public class OutOfCoffeeException extends Exception {}");
     String output = writeUnused(findUnusedCode());
 
     // Verify that both exception types are live.
@@ -1468,10 +1655,265 @@ public class TreeShakerTest extends TestCase {
         .isEqualTo(
             String.join(
                 "\n",
-                "OverheatException:",
-                "    OverheatException()",
                 "OutOfCoffeeException:",
-                "    OutOfCoffeeException()\n"));
+                "    OutOfCoffeeException()",
+                "OverheatException:",
+                "    OverheatException()\n"));
+  }
+
+  // Regression test for b/229773937
+  public void testJreMethodOverride() throws IOException {
+    addTreeShakerRootsFile("EntryClass\n");
+    addSourceFile(
+        "EntryClass.java",
+        "public class EntryClass {\n"
+            + "  public void exportedMethod() {\n"
+            + "    new CoffeeMaker().start();\n"
+            + "  }\n"
+            + "}");
+    addSourceFile(
+        "CoffeeMaker.java",
+        "import java.util.Comparator;\n"
+            + "import java.util.TreeSet;\n"
+            + "class CoffeeMaker {\n"
+            + "  void start() {\n"
+            + "    TreeSet<Bean> set = new TreeSet<>(new BeanComparator());\n"
+            + "    set.add(new Bean(1));\n"
+            + "    set.add(new Bean(1));\n"
+            + "  }\n"
+            + "  public static class BeanComparator implements Comparator<Bean> {\n"
+            + "    @Override\n"
+            + "    public int compare(Bean a, Bean b) {\n"
+            + "      return a.roastLevel - b.roastLevel;\n"
+            + "    }\n"
+            + "  }\n"
+            + "  public static class Bean {\n"
+            + "    private final int roastLevel;\n"
+            + "    public Bean(int roastLevel) {\n"
+            + "      this.roastLevel = roastLevel;\n"
+            + "    }\n"
+            + "  }\n"
+            + "}");
+    String output = writeUnused(findUnusedCode());
+
+    // Verify that BeanComparator and its methods are live
+    assertThat(output).isEmpty();
+  }
+
+  // Regression test for b/232218541
+  public void testPolymorphicCallsWithDifferentReturnTypes() throws IOException {
+    addTreeShakerRootsFile("EntryClass\n");
+    addSourceFile(
+        "EntryClass.java",
+        "public class EntryClass {\n"
+            + "  public void exportedMethod() {\n"
+            + "    new CoffeeMaker().start();\n"
+            + "  }\n"
+            + "}");
+    addSourceFile(
+        "CoffeeMaker.java",
+        "class CoffeeMaker {\n"
+            + "  void start() {\n"
+            + "    ElectricHeater heater = new InductionHeater();\n"
+            + "    heater.copy();\n"
+            + "  }\n"
+            + "}");
+
+    addSourceFile(
+        "Heater.java",
+        "class Heater {\n" + "  Heater copy() {\n" + "    return new Heater();\n" + "  };\n" + "}");
+
+    addSourceFile(
+        "ElectricHeater.java",
+        "class ElectricHeater extends Heater {\n"
+            + "  @Override\n"
+            + "  ElectricHeater copy() {\n"
+            + "    return new ElectricHeater();\n"
+            + "  }\n"
+            + "}");
+
+    addSourceFile(
+        "InductionHeater.java",
+        "class InductionHeater extends ElectricHeater {\n"
+            + "  @Override\n"
+            + "  InductionHeater copy() { \n"
+            + "    return new InductionHeater();\n"
+            + "  }\n"
+            + "}");
+
+    // Verify that ElectricHeater#copy() and its override in InductionHeater are live.
+    assertThat(getUnusedClasses(findUnusedCode())).isEmpty();
+    assertThat(getUnusedMethods(findUnusedCode()))
+        .containsExactly(getMethodName("Heater", "copy", "()LHeater;"));
+  }
+
+  public void testOverridingMethodWithParameterType() throws IOException {
+    addTreeShakerRootsFile("EntryClass\n");
+    addSourceFile(
+        "EntryClass.java",
+        "public class EntryClass {\n"
+            + "  public void exportedMethod() {\n"
+            + "    Callback<String> callback = new StringCallback();"
+            + "    callback.callback(\"test\");\n"
+            + "  }\n"
+            + "}");
+    addSourceFile(
+        "Callback.java", "interface Callback<T> {\n" + "  void callback(T input);\n" + "}");
+    addSourceFile(
+        "StringCallback.java",
+        "class StringCallback implements Callback<String> {\n"
+            + "  @Override public void callback(String input) {}\n"
+            + "}");
+
+    String output = writeUnused(findUnusedCode());
+    assertThat(output).isEmpty();
+  }
+
+  public void testUsedByNativeAnnotation_class() throws IOException {
+    addTreeShakerRootsFile("CoffeeMaker:\n    start()");
+    addSourceFile(
+        "UsedByNative.java",
+        "package com.google.j2objc.annotations;\n"
+            + "import static java.lang.annotation.ElementType.*;\n"
+            + "import java.lang.annotation.Target;\n"
+            + "@Target({TYPE, METHOD, CONSTRUCTOR})\n"
+            + "public @interface UsedByNative {}");
+    addSourceFile(
+        "CoffeeMaker.java",
+        "import com.google.j2objc.annotations.UsedByNative;\n"
+            + "class CoffeeMaker {\n"
+            + "  public static native void start() /*-[\n"
+            + "    NSLog(CoffeeMaker_Constants_get_NAME());\n"
+            + "  ]-*/;\n"
+            + "  @UsedByNative\n"
+            + "  private static final class Constants {\n"
+            + "    private static final String NAME = \"CoffeeMaker\";\n"
+            + "  }\n"
+            + "}\n");
+    assertThat(getUnusedClasses(findUnusedCode())).doesNotContain("CoffeeMaker$Constants");
+  }
+
+  public void testUsedByNativeAnnotation_method() throws IOException {
+    addTreeShakerRootsFile("A:\n    start()");
+    addSourceFile(
+        "UsedByNative.java",
+        "package com.google.j2objc.annotations;\n"
+            + "import static java.lang.annotation.ElementType.*;\n"
+            + "import java.lang.annotation.Target;\n"
+            + "@Target({TYPE, METHOD, CONSTRUCTOR, FIELD})\n"
+            + "public @interface UsedByNative {}");
+    addSourceFile(
+        "A.java",
+        "import com.google.j2objc.annotations.UsedByNative;\n"
+            + "class A {\n"
+            + "  private ReferencedByField referencedByClass = new ReferencedByField();\n"
+            + "  public static native void start() /*-[\n"
+            + "    NSLog(A_WithAnnotation_getName());\n"
+            + "  ]-*/;\n"
+            + "  @UsedByNative\n"
+            + "  private static final class WithAnnotation {\n"
+            + "    private static String getName() {return \"A\";}\n"
+            + "    private static void unused() {}\n"
+            + "  }\n"
+            + "  private static final class WithoutAnnotation {\n"
+            + "    @UsedByNative\n"
+            + "    private static String getName() {return \"A\";}\n"
+            + "    private static void unused() {}\n"
+            + "  }\n"
+            + "  private static final class ReferencedByField {\n"
+            + "    @UsedByNative\n"
+            + "    private static String getName() {return \"A\";}\n"
+            + "    private static void unused() {}\n"
+            + "  }\n"
+            + "}\n");
+    assertThat(getUnusedClasses(findUnusedCode()))
+        .containsExactly("A$WithoutAnnotation", "com.google.j2objc.annotations.UsedByNative");
+    assertThat(getUnusedMethods(findUnusedCode()))
+        .containsExactly(
+            getMethodName("A$ReferencedByField", "unused", "()V"), getMethodName("A", "A", "()V"));
+  }
+
+  public void testUsedByReflectionAnnotation_class() throws IOException {
+    addTreeShakerRootsFile("CoffeeMaker:\n    start()");
+    addSourceFile(
+        "UsedByReflection.java",
+        "package com.google.j2objc.annotations;\n"
+            + "import static java.lang.annotation.ElementType.*;\n"
+            + "import java.lang.annotation.Target;\n"
+            + "@Target({TYPE, METHOD, CONSTRUCTOR, FIELD})\n"
+            + "public @interface UsedByReflection {}");
+    addSourceFile(
+        "CoffeeMaker.java",
+        "import com.google.j2objc.annotations.UsedByReflection;\n"
+            + "class CoffeeMaker {\n"
+            + "  @UsedByReflection\n"
+            + "  private static final class Constants {\n"
+            + "    private static final String NAME = \"CoffeeMaker\";\n"
+            + "  }\n"
+            + "}\n");
+    assertThat(getUnusedClasses(findUnusedCode())).doesNotContain("CoffeeMaker$Constants");
+  }
+
+  public void testUsedByReflectionAnnotation_method() throws IOException {
+    addTreeShakerRootsFile("A:\n    start()");
+    addSourceFile(
+        "UsedByReflection.java",
+        "package com.google.j2objc.annotations;\n"
+            + "import static java.lang.annotation.ElementType.*;\n"
+            + "import java.lang.annotation.Target;\n"
+            + "@Target({TYPE, METHOD, CONSTRUCTOR, FIELD})\n"
+            + "public @interface UsedByReflection {}");
+    addSourceFile(
+        "A.java",
+        "import com.google.j2objc.annotations.UsedByReflection;\n"
+            + "class A {\n"
+            + "  private ReferencedByField referencedByClass = new ReferencedByField();\n"
+            + "  public static native void start();\n"
+            + "  @UsedByReflection\n"
+            + "  private static final class WithAnnotation {\n"
+            + "    private static String getName() {return \"A\";}\n"
+            + "    private static void unused() {}\n"
+            + "  }\n"
+            + "  private static final class WithoutAnnotation {\n"
+            + "    @UsedByReflection\n"
+            + "    private static String getName() {return \"A\";}\n"
+            + "    private static void unused() {}\n"
+            + "  }\n"
+            + "  private static final class ReferencedByField {\n"
+            + "    @UsedByReflection\n"
+            + "    private static String getName() {return \"A\";}\n"
+            + "    private static void unused() {}\n"
+            + "  }\n"
+            + "}\n");
+    assertThat(getUnusedClasses(findUnusedCode()))
+        .containsExactly("A$WithoutAnnotation", "com.google.j2objc.annotations.UsedByReflection");
+    assertThat(getUnusedMethods(findUnusedCode()))
+        .containsExactly(
+            getMethodName("A$ReferencedByField", "unused", "()V"), getMethodName("A", "A", "()V"));
+  }
+
+  public void testEntryClassMembers() throws IOException {
+    addTreeShakerRootsFile("EntryClass");
+    addSourceFile(
+        "EntryClass.java",
+        "public class EntryClass {\n"
+            + "  private String field;\n"
+            + "  public void publicMethod() {\n"
+            + "    Runnable anonymousClass = new Runnable() {\n"
+            + "      public void run() {}\n"
+            + "    };\n"
+            + "  }\n"
+            + "  private void privateMethod() {}\n"
+            + "  class InnerClass {}\n"
+            + "  static class StaticInnerClass {}\n"
+            + "  static interface InnerInterface {}\n"
+            + "  static enum InnerEnum { A, B, C; }\n"
+            + "}\n");
+
+    CodeReferenceMap unused = findUnusedCode();
+    assertThat(getUnusedClasses(unused)).isEmpty();
+    String output = writeUnused(findUnusedCode());
+    assertThat(output).isEmpty();
   }
 
   private static String writeUnused(CodeReferenceMap unused) {
@@ -1496,9 +1938,16 @@ public class TreeShakerTest extends TestCase {
 
   private static ImmutableSet<String> getUnusedMethods(CodeReferenceMap unused) {
     ImmutableSet.Builder<String> methods = new ImmutableSet.Builder<>();
-    unused.getReferencedMethods().cellSet().forEach(cell ->
-        cell.getValue().forEach(signature ->
-            methods.add(getMethodName(cell.getRowKey(), cell.getColumnKey(), signature))));
+    unused
+        .getReferencedMethods()
+        .cellSet()
+        .forEach(
+            cell ->
+                cell.getValue()
+                    .forEach(
+                        signature ->
+                            methods.add(
+                                getMethodName(cell.getRowKey(), cell.getColumnKey(), signature))));
     return methods.build();
   }
 

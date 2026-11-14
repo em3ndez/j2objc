@@ -33,26 +33,8 @@ public class OptionsTest extends GenerationTest {
       String javaVersion = System.getProperty("java.specification.version");
       options = new Options();
       options.load(new String[] {});
+    if (SourceVersion.executingOnSupportedVersion()) {
       assertTrue(javaVersion.startsWith(options.getSourceVersion().toString()));
-
-    if (!onJava9OrAbove()) {
-      System.setProperty("java.specification.version", "1.8");
-      options = new Options();
-      options.load(new String[] {});
-      assertEquals(SourceVersion.JAVA_8, options.getSourceVersion());
-
-      System.setProperty("java.specification.version", "1.6");
-      options = new Options();
-      options.load(new String[] {});
-      assertEquals(SourceVersion.JAVA_6, options.getSourceVersion());
-
-      System.setProperty("java.specification.version", "1.7");
-      options = new Options();
-      options.load(new String[] {});
-      assertEquals(SourceVersion.JAVA_7, options.getSourceVersion());
-
-      // Reset the java.version property to prevent any unexpected jvm behavior after testing.
-      System.setProperty("java.specification.version", javaVersion);
     }
 
     String[] argsJavaSource = "-source 1.6".split(" ");

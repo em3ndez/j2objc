@@ -120,29 +120,22 @@ public class TreeUtil {
     return null;
   }
 
-  /**
-   * Returns the first descendant of the given node that is not a ParenthesizedExpression.
-   */
-  public static Expression trimParentheses(Expression node) {
-    while (node instanceof ParenthesizedExpression) {
-      node = ((ParenthesizedExpression) node).getExpression();
-    }
-    return node;
-  }
-
   public static MethodDeclaration getEnclosingMethod(TreeNode node) {
     return getNearestAncestorWithType(MethodDeclaration.class, node);
   }
 
-  private static final ImmutableList<Class<?>> EXECUTABLE_DECLARATION_TYPES =
-      ImmutableList.of(MethodDeclaration.class, FunctionDeclaration.class);
+  private static final ImmutableList<Class<?>> NODES_ENCLOSING_RETURN =
+      ImmutableList.of(
+          MethodDeclaration.class, FunctionDeclaration.class, EmbeddedStatementExpression.class);
 
   public static TypeMirror getOwningReturnType(TreeNode node) {
-    TreeNode enclosingNode = getNearestAncestorWithTypeOneOf(EXECUTABLE_DECLARATION_TYPES, node);
-    if (enclosingNode instanceof MethodDeclaration) {
-      return ((MethodDeclaration) enclosingNode).getExecutableElement().getReturnType();
-    } else if (enclosingNode instanceof FunctionDeclaration) {
-      return ((FunctionDeclaration) enclosingNode).getReturnType().getTypeMirror();
+    TreeNode enclosingNode = getNearestAncestorWithTypeOneOf(NODES_ENCLOSING_RETURN, node);
+    if (enclosingNode instanceof MethodDeclaration methodDeclaration) {
+      return methodDeclaration.getExecutableElement().getReturnType();
+    } else if (enclosingNode instanceof FunctionDeclaration functionDeclaration) {
+      return functionDeclaration.getReturnType().getTypeMirror();
+    } else if (enclosingNode instanceof Expression expression) {
+      return expression.getTypeMirror();
     }
     return null;
   }
@@ -235,7 +228,6 @@ public class TreeUtil {
    * represents a variable. Returns null otherwise.
    */
   public static VariableElement getVariableElement(Expression node) {
-    node = trimParentheses(node);
     switch (node.getKind()) {
       case FIELD_ACCESS:
         return ((FieldAccess) node).getVariableElement();
@@ -309,7 +301,7 @@ public class TreeUtil {
 
   /**
    * Returns the given statement as a list of statements that can be added to.
-   * If node is a Block, then returns it's statement list. If node is the direct
+   * If node is a Block, then returns its statement list. If node is the direct
    * child of a Block, returns the sublist containing node as the only element.
    * Otherwise, creates a new Block node in the place of node and returns its
    * list of statements.

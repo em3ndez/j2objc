@@ -59,7 +59,9 @@ class FieldGenerator {
   virtual ~FieldGenerator();
 
   virtual void GenerateFieldHeader(io::Printer* printer) const;
+  virtual void GenerateFieldSource(io::Printer* printer) const;
   virtual void GenerateFieldBuilderHeader(io::Printer* printer) const = 0;
+  virtual void GenerateFieldBuilderSource(io::Printer* printer) const;
 
   virtual void GenerateMessageOrBuilderProtocol(io::Printer* printer) const = 0;
 
@@ -81,7 +83,6 @@ class FieldGenerator {
 
   virtual void GenerateFieldDataOffset(io::Printer *printer) const;
   virtual void GenerateClassNameOrMapData(io::Printer *printer) const;
-  virtual void GenerateStaticRefs(io::Printer *printer) const;
 
  private:
   GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(FieldGenerator);
@@ -93,7 +94,11 @@ class SingleFieldGenerator : public FieldGenerator {
 
   virtual ~SingleFieldGenerator() { }
 
+  virtual void GenerateFieldSource(io::Printer* printer) const;
+
   virtual void GenerateFieldBuilderHeader(io::Printer* printer) const;
+
+  virtual void GenerateFieldBuilderSource(io::Printer* printer) const;
 
   virtual void GenerateMessageOrBuilderProtocol(io::Printer* printer) const;
 
@@ -111,7 +116,9 @@ class RepeatedFieldGenerator : public FieldGenerator {
 
   virtual ~RepeatedFieldGenerator() { }
 
+  virtual void GenerateFieldSource(io::Printer* printer) const;
   virtual void GenerateFieldBuilderHeader(io::Printer* printer) const;
+  virtual void GenerateFieldBuilderSource(io::Printer* printer) const;
 
   virtual void GenerateMessageOrBuilderProtocol(io::Printer* printer) const;
 
@@ -135,7 +142,9 @@ class MapFieldGenerator : public FieldGenerator {
 
   virtual ~MapFieldGenerator() { }
 
+  virtual void GenerateFieldSource(io::Printer* printer) const;
   virtual void GenerateFieldBuilderHeader(io::Printer* printer) const;
+  virtual void GenerateFieldBuilderSource(io::Printer* printer) const;
   virtual void GenerateMessageOrBuilderProtocol(io::Printer* printer) const;
   virtual void GenerateDeclaration(io::Printer* printer) const;
   virtual void GenerateMapEntryFieldData(io::Printer *printer) const;
@@ -148,7 +157,6 @@ class MapFieldGenerator : public FieldGenerator {
 
  protected:
   virtual void GenerateClassNameOrMapData(io::Printer *printer) const;
-  virtual void GenerateStaticRefs(io::Printer *printer) const;
 
  private:
   const FieldDescriptor* key_field_;
@@ -171,7 +179,6 @@ class MapEntryFieldGenerator : public FieldGenerator {
 
  protected:
   virtual void GenerateFieldDataOffset(io::Printer *printer) const;
-  virtual void GenerateStaticRefs(io::Printer *printer) const;
 
  private:
   GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(MapEntryFieldGenerator);

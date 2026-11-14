@@ -24,6 +24,8 @@ OBJC_SOURCES_MANIFEST = $(BUILD_DIR)/objc_sources.mf
 SOURCEPATH = $(SRC_DIR)
 INCLUDE_DIRS = $(GEN_OBJC_DIR)
 
+CC_WARNINGS += -Wno-bitwise-instead-of-logical -Wno-unused-but-set-variable
+
 J2OBJCC := $(ARCH_BIN_DIR)/j2objcc -c $(INCLUDE_DIRS:%=-I%) $(CC_WARNINGS)
 
 TRANSLATE_JAVA_FULL = $(JAVA_SOURCES)
@@ -67,7 +69,9 @@ MKTEMP_DIR = j2objc-xalan
 XALAN_LICENSE = NOTICE
 XALAN_LICENSE_DIST = $(DIST_LICENSE_DIR)/apache_xalan_license.txt
 
-dist: $(FAT_LIBS_DIST) $(DIST_JAR) $(XALAN_LICENSE_DIST)
+dist: framework
+
+lib: $(FAT_LIBS_DIST) $(DIST_JAR) $(XALAN_LICENSE_DIST)
 	@tar cf - -C $(GEN_OBJC_DIR) $(TRANSLATE_HEADERS:$(GEN_OBJC_DIR)/%=%) \
 	    | tar xfp - -C $(ARCH_INCLUDE_DIR)
 
@@ -86,7 +90,7 @@ $(JAR): $(JAVA_SOURCES) | $(BUILD_DIR) java_deps_dist annotations_dist
 	@stage_dir=`${MKTEMP_CMD}`; \
 	$(JAVAC) -sourcepath $(SOURCEPATH) -encoding UTF-8 \
 	    -cp $(DIST_JAR_DIR)/j2objc_annotations.jar -d $$stage_dir \
-	    -source 1.8 -target 1.8 -bootclasspath $(DIST_JAR_DIR)/jre_emul.jar $^; \
+	    -source 11 -target 11 -bootclasspath $(DIST_JAR_DIR)/jre_emul.jar $^; \
 	jar cf $@ -C $$stage_dir .; \
 	rm -rf $$stage_dir
 
